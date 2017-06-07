@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-set(PROJECT_NAME non_linear_kirchhoff)
+set(PROJECT_NAME nonlinear_kirchhoff)
 project(${PROJECT_NAME})
 
 # Set CMake behavior
@@ -50,7 +50,8 @@ endif()
 
 # Compile UFL files with ffc
 # taken from https://bitbucket.org/fenics-project/dolfin/src/efc41658e5e10bf16fb02489c57e20e3c291fade/CMakeLists.txt
-set(UFL_FILENAMES "${CMAKE_SOURCE_DIR}/LinearKirchhoff.ufl")
+set(UFL_FILENAMES "${CMAKE_SOURCE_DIR}/NonlinearKirchhoff.ufl")
+
 # MBD FIXME: enable optimization when implemented in ffc
 # MBD weird.. COMMAND escapes whitespace so we pass a list which it automatically expands
 set(FFC_FLAGS "-l" "dolfin" "-r" "quadrature" "-O0" "-fsplit") 
@@ -72,11 +73,13 @@ foreach(UFL_FILENAME ${UFL_FILENAMES})
 endforeach(UFL_FILENAME)
 
 # Executable
-add_executable(${PROJECT_NAME}
-  ${FFC_GENERATED_SOURCES}
-  HermiteDirichletBC.cpp output.cpp
-  ConstraintMatrix.cpp
-  KirchhoffAssembler.cpp DKTGradient.cpp main.cpp)
+add_executable(${PROJECT_NAME} ${FFC_GENERATED_SOURCES}
+  HermiteDirichletBC.cpp
+  IsometryConstraint.cpp
+  KirchhoffAssembler.cpp
+  DKTGradient.cpp
+  output.cpp
+  main.cpp)
 
 # Target libraries
 target_link_libraries(${PROJECT_NAME} ${DOLFIN_LIBRARIES})
