@@ -14,7 +14,8 @@ namespace dolfin {
     std::shared_ptr<Matrix> _Bt;
     
   public:
-    IsometryConstraint(const FunctionSpace& W);
+    IsometryConstraint(const FunctionSpace& W,
+                       const VertexFunction<bool>& boundary_marker);
     
     void update(const Function& Y);
     std::shared_ptr<const Matrix> get() { return _B; }

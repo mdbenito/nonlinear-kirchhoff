@@ -6,7 +6,6 @@
 
 #include "KirchhoffAssembler.h"
 #include "LinearKirchhoff.h"
-#include "HermiteDirichletBC.h"
 #include "output.h"
 
 using namespace dolfin;
@@ -19,13 +18,19 @@ class Force : public Expression
   }
 };
 
-class DirichletBoundary : public SubDomain
+class LeftBoundary : public SubDomain
 {
   bool inside(const Array<double>& x, bool on_boundary) const
   {
-    return on_boundary;
-      // near(x[0], 0) || near(x[0], M_PI) ||
-      // near(x[1], -M_PI/2) || near(x[1], M_PI/2);
+    return on_boundary && near(x[0], 0);
+  }
+};
+
+class RightBoundary : public SubDomain
+{
+  bool inside(const Array<double>& x, bool on_boundary) const
+  {
+    return on_boundary && near(x[0], M_PI);
   }
 };
 

@@ -6,7 +6,8 @@
 
 namespace dolfin {
 
-  IsometryConstraint::IsometryConstraint(const FunctionSpace& W)
+  IsometryConstraint::IsometryConstraint(const FunctionSpace& W,
+                                         const VertexFunction<bool>& boundary_marker)
     : _v2d(vertex_to_dof_map(W)),
       _B(std::make_shared<Matrix>()), _Bt(std::make_shared<Matrix>())
   {
@@ -55,6 +56,8 @@ namespace dolfin {
         std::size_t dofs[3];  // in order: point eval, dx, dy
         for (VertexIterator v(mesh); !edge.end(); ++edge)
         {
+          if (boundary_marker[v])
+            continue;
           for (int sub = 0; sub < 3; ++sub)  // iterate over the 3 subspaces
           {
             dofs[0] = _v2d[9*v.index()+3*i];
@@ -149,5 +152,6 @@ namespace dolfin {
 
     B->apply("insert");
   }
+
   
 }
