@@ -65,75 +65,138 @@ project_dkt(std::shared_ptr<const GenericFunction> what,
 int
 dostuff(void)
 {
+  // factor multiplying the bending energy term
+  double alpha = 1.0;
+  
+  // time step size. In the paper the triangulation consists of halved squares
+  // and tau is the length of the sides, not the diagonal, that is hmin().
+  double tau = mesh->hmin();
+
   auto mesh = std::make_shared<RectangleMesh>(MPI_COMM_WORLD,
                                               Point (0, -M_PI/2), Point (M_PI, M_PI/2),
-                                              20, 20); //, "crossed");
-  auto W = std::make_shared<LinearKirchhoff::Form_dkt_FunctionSpace_0>(mesh);
-  auto Theta = std::make_shared<LinearKirchhoff::Form_p22_FunctionSpace_0>(mesh);
+                                              20, 20, "crossed");
+  auto W3 = std::make_shared<NonlinearKirchhoff::Form_dkt_FunctionSpace_0>(mesh);
+  auto T3 = std::make_shared<NonlinearKirchhoff::Form_p22_FunctionSpace_0>(mesh);
+
+  // Initial data: careful that it fulfils the BCs.
+  auto    y0 = project_dkt(std::make_shared<Constant>({0,0,0}), W3);
   
-  auto u0 = project_dkt(std::make_shared<Constant>(0.0), W);
-  auto boundary = std::make_shared<DirichletBoundary>();
+  // The discretised isometry constraint includes the condition for
+  // the nodes on the Dirichlet boundary to be zero. This ensures that
+  // the updates don't change the values of the initial condition,
+  // which should fulfill the BC
+  auto  left = std::make_shared<LeftBoundary>();  
+  auto right = std::make_shared<RightBoundary>();
+  VertexFunction<bool> constraint_boundary(mesh, false);
+  left.mark(constraint_boundary, true);
+  right.mark(constraint_boundary, true);
+  IsometryConstraint B(W3, constraint_boundary);
+  
   auto force = std::make_shared<Force>();
 
-  HermiteDirichletBC bc(W, u0, boundary);
-  
-  LinearKirchhoff::Form_dkt a(W, W);
-  LinearKirchhoff::Form_force L(W);
-  LinearKirchhoff::Form_p22 p22(Theta, Theta);
+  NonlinearKirchhoff::Form_dkt a(W3, W3);
+  NonlinearKirchhoff::Form_force L(W3);
+  NonlinearKirchhoff::Form_p22 p22(Th3, Th3);
 
+  Function y(W3);
+  auto A = std::make_shared<Matrix>();  // constant upper left block in the full matrix
+  auto ZeroMat = std::make_shared<Matrix>();
+ FIXME:  ZeroMat->set_size(4,4);
+ FIXME:  ZeroMat->init(0);
+  auto ZeroVec = std::make_shared<Vector>();
+ FIXME:  ZeroVec->init(0);
+  Vector b;  // Holds the assembled force field (constant among iterations)
+  auto Fk = std::make_shared<Vector>();  // Non-zero part of the RHS
 
-  Function u(W);
-  Matrix A;
-  Vector b;
   KirchhoffAssembler assembler;
   Assembler rhs_assembler;
   LUSolver solver;
 
   Table table("Assembly and application of BCs");
-    
-  std::cout << "Projecting force onto W... ";
+  
+  std::cout << "Projecting force onto W^3... ";
   tic();
-  auto f = project_dkt(force, W);
+  auto f = project_dkt(force, W3);
   table("Projection", "time") = toc();
   std::cout << "Done.\n";
 
-  std::cout << "Assembling LHS... ";
+  std::cout << "Assembling bilinear form... ";
   tic();
-  assembler.assemble(A, a, p22);
-  table("LHS assembly", "time") = toc();
+  assembler.assemble(*A, a, p22);
+  *A *= 1 + alpha*tau;
+  table("Form assembly", "time") = toc();
   std::cout << "Done.\n";
 
-  std::cout << "Assembling RHS... ";
+  // dump_full_tensor(A, 3);
+
+  std::cout << "Assembling force vector... ";
   tic();
   L.f = f;
   rhs_assembler.assemble(b, L);
-  table("RHS assembly", "time") = toc();
+  table("Force assembly", "time") = toc();
   std::cout << "Done.\n";
 
-  dump_full_tensor(A, 3);
+  BlockMatrix Mk(2, 2);
+  Mk.set_block(0, 0, A);
+  Mk.set_block(1, 1, Zero);
+
+  bool stop = false;
+  auto tmp = std::make_shared<Vector>();
+  while (! stop) {
+    std::cout << "Computing RHS... ";
+    tic();
+  FIXME: tmp = -tau * A * Yk + tau*L;
+    table("Compute RHS", "time") = toc();
+    Fk.set_block(0, tmp);
+    Mk.set_block(1, ZeroVec);
+    std::cout << "Done.\n";
+    
+    std::cout << "Updating discrete isometry constraint... ";
+    tic();
+    B.update(y);
+    table("Update constraint", "time") = toc();
+    Mk.set_block(1, 0, B.get());
+    Mk.set_block(0, 1, B.get_transposed());
+    std::cout << "Done.\n";
   
-  std::cout << "Applying BCs... ";
-  tic();
-  bc.apply(A, b);
-  table("BC application", "time") = toc();
-  std::cout << "Done.\n";
+    // Create block vector
+    BlockVector xx(2);
+    xx.set_block(0, x);
+    xx.set_block(1, x);
 
-  std::cout << "Solving... ";
-  tic();
-  solver.solve(A, *(u.vector()), b);
-  table("Solution", "time") = toc();
-  std::cout << "Done.\n";
+    // Create another block vector
+    std::shared_ptr<GenericVector> y(new Vector);
+    A->init_vector(*y, 0);
+    BlockVector yy(2);
+    yy.set_block(0, y);
+    yy.set_block(1, y);
 
+    // Multiply
+    AA.mult(xx, yy);
+    info("||Ax|| = %g", y->norm("l2"));
+
+    std::cout << "Solving... ";
+    tic();
+    solver.solve(Mk, *(yy.vector()), Fk);
+    table("Solution", "time") = toc();
+    std::cout << "Done.\n";
+
+    
+    
+  }
+  
+
+  
   // info(table);  // outputs "<Table of size 5 x 1>"
   std::cout << table.str(true) << std::endl;
 
-  std::cout << std::endl;
-  dump_full_tensor(A, 3);
-  std::cout << std::endl;
-  dump_full_tensor(b, 3);
-  std::cout << std::endl;
-  dump_full_tensor(*u.vector(), 2);
-  std::cout << std::endl;
+  // std::cout << std::endl;
+  // dump_full_tensor(A, 3);
+  // std::cout << std::endl;
+  // dump_full_tensor(b, 3);
+  // std::cout << std::endl;
+  // dump_full_tensor(*u.vector(), 2);
+  // std::cout << std::endl;
   // Save solution in VTK format
   File file("solution.pvd");
   file << u;

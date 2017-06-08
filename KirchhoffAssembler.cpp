@@ -30,8 +30,7 @@
 using namespace dolfin;
 
 /* Remember that a is a Form in a FunctionSpace<DKT> and p2form is a
- * form in a VectorFunctionSpace<P2>
- */
+ * form in a VectorFunctionSpace<P2>  */
 void
 KirchhoffAssembler::assemble(GenericTensor& A,
                              const Form& a,

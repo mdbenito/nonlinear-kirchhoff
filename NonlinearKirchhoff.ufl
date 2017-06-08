@@ -1,6 +1,6 @@
-p22element = VectorElement("Lagrange", triangle, 2)
+p22element = TensorElement("Lagrange", triangle, 2, shape=(3,2))
 dktelement = VectorElement("DKT", triangle, 3, dim=3)
-project_element = FiniteElement("Lagrange", triangle, 3)
+project_element = VectorElement("Lagrange", triangle, 3, dim=3)
 
 p = TrialFunction(p22element)
 q = TestFunction(p22element)
@@ -20,5 +20,6 @@ w = TestFunction(dktelement)
 project_lhs = inner(w, Pg)*dx
 project_rhs = inner(w, g)*dx
 
+# Items to export 
 elements = [p22element, dktelement, project_element]
 forms = [p22, dkt, force, project_lhs, project_rhs]
