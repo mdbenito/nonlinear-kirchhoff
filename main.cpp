@@ -4,6 +4,9 @@
 #include <vector>
 #include <dolfin.h>
 
+#include <petscmat.h>
+#include <petscsys.h>
+
 #include "KirchhoffAssembler.h"
 #include "LinearKirchhoff.h"
 #include "output.h"
@@ -69,7 +72,7 @@ dostuff(void)
   double alpha = 1.0;
   
   // time step size. In the paper the triangulation consists of halved squares
-  // and tau is the length of the sides, not the diagonal, that is hmin().
+  // and tau is the length of the sides, not the diagonal, i.e. hmin().
   double tau = mesh->hmin();
 
   auto mesh = std::make_shared<RectangleMesh>(MPI_COMM_WORLD,
@@ -79,7 +82,7 @@ dostuff(void)
   auto T3 = std::make_shared<NonlinearKirchhoff::Form_p22_FunctionSpace_0>(mesh);
 
   // Initial data: careful that it fulfils the BCs.
-  auto    y0 = project_dkt(std::make_shared<Constant>({0,0,0}), W3);
+  auto y0 = project_dkt(std::make_shared<Constant>({0,0,0}), W3);
   
   // The discretised isometry constraint includes the condition for
   // the nodes on the Dirichlet boundary to be zero. This ensures that
@@ -99,13 +102,19 @@ dostuff(void)
   NonlinearKirchhoff::Form_p22 p22(Th3, Th3);
 
   Function y(W3);
-  auto A = std::make_shared<Matrix>();  // constant upper left block in the full matrix
-  auto ZeroMat = std::make_shared<Matrix>();
- FIXME:  ZeroMat->set_size(4,4);
- FIXME:  ZeroMat->init(0);
-  auto ZeroVec = std::make_shared<Vector>();
- FIXME:  ZeroVec->init(0);
-  Vector b;  // Holds the assembled force field (constant among iterations)
+
+  //// Upper left block in the full matrix (constant)
+  auto A = std::make_shared<Matrix>();
+
+  //// Lower right block:
+  // HACK: I really don't know how to create an empty 4x4 Matrix,
+  // so I use PETSc... duh
+  Mat* tmpMat;
+  MatCreateDense(mesh.mpi_comm(), 4, 4, 4, 4, NULL, tmpMat);
+  auto zeroMat = std::make_shared<PETScMatrix>(tmpMat);
+  auto zeroVec = std::make_shared<Vector>();
+  zeroMat->init_vector(*zeroVec, 0);
+  
   auto Fk = std::make_shared<Vector>();  // Non-zero part of the RHS
 
   KirchhoffAssembler assembler;
@@ -127,9 +136,8 @@ dostuff(void)
   table("Form assembly", "time") = toc();
   std::cout << "Done.\n";
 
-  // dump_full_tensor(A, 3);
-
   std::cout << "Assembling force vector... ";
+  Vector b;
   tic();
   L.f = f;
   rhs_assembler.assemble(b, L);
@@ -145,10 +153,10 @@ dostuff(void)
   while (! stop) {
     std::cout << "Computing RHS... ";
     tic();
-  FIXME: tmp = -tau * A * Yk + tau*L;
+  FIXME: tmp = tau * (b -  A * Yk)
     table("Compute RHS", "time") = toc();
     Fk.set_block(0, tmp);
-    Mk.set_block(1, ZeroVec);
+    Mk.set_block(1, zeroVec);
     std::cout << "Done.\n";
     
     std::cout << "Updating discrete isometry constraint... ";
