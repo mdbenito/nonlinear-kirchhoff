@@ -1,6 +1,10 @@
 #ifndef __ISOMETRY_CONSTRAINT_H
 #define __ISOMETRY_CONSTRAINT_H
 
+#include <vector>
+#include <memory>
+#include <dolfin.h>
+
 namespace dolfin {
 
   class IsometryConstraint
