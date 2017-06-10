@@ -126,7 +126,7 @@ namespace dolfin {
   }
   
   void
-  IsometryConstraint::update(const Function& Y)
+  IsometryConstraint::update_with(const Function& Y)
   {
     std::size_t dofs[3];
     std::size_t rows[4] = {0, 1, 2, 3};
