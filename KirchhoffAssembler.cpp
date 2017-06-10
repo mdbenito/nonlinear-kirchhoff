@@ -49,7 +49,6 @@ KirchhoffAssembler::assemble(GenericTensor& A,
   // Or by disabling the whole chunk in the ifdef, as I did.
   if (num_threads > 0)
   {
-    throw -1;
     OpenMpAssembler assembler;
     assembler.add_values = add_values;
     assembler.finalize_tensor = finalize_tensor;

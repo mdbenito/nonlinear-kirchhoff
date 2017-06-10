@@ -29,6 +29,8 @@ DKTGradient::update(const dolfin::Cell& cell)
   update(cc);
 }
 
+/// HACK: this permutation is applied to M during update()
+// to adapt for the actual local dofmap.
 void
 permutation_hack(DKTGradient::M_t& M)
 {

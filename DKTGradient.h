@@ -30,7 +30,7 @@ public:
   typedef Eigen::Matrix<double, 12, 9, Eigen::RowMajor> M_t;
   typedef Eigen::Matrix<double, 9, 12, Eigen::RowMajor> Mt_t;
   M_t   M;  // gradient matrix
-  Mt_t Mt; // transposed gradient matrix
+  Mt_t Mt;  // transposed gradient matrix
   
   typedef std::array<double, 9*9> P3Tensor;
   typedef std::array<double, 12> P22Vector;
