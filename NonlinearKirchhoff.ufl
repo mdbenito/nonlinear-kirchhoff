@@ -8,10 +8,10 @@ p22 = inner(nabla_grad(p), nabla_grad(q))*dx
 
 u = TrialFunction(dktelement)
 v = TestFunction(dktelement)
-dkt = u*v*dx
+dkt = inner(u,v)*dx
 
 f = Coefficient(dktelement)
-force = f*v*dx
+force = inner(f,v)*dx
 
 # Define variational problem for projection
 g = Coefficient(project_element)
