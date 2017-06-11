@@ -35,7 +35,7 @@ namespace dolfin {
 
       // FIXME: is this ok? every process should own a 4xN block
       auto row_index_map = std::make_shared<IndexMap>(mesh.mpi_comm(), 4, 1);
-      row_index_map->set_local_to_global(WHAT HERE);
+      // row_index_map->set_local_to_global(vector of global indices beyond local range);
 
     
       std::vector<std::shared_ptr<const IndexMap> > index_maps
@@ -84,7 +84,7 @@ namespace dolfin {
 
       // FIXME: is this ok? every process should own a Nx4 block
       auto col_index_map = std::make_shared<IndexMap>(mesh.mpi_comm(), 4, 1);
-      col_index_map->set_local_to_global(WHAT HERE);
+      // col_index_map->set_local_to_global(vector of global indices beyond local range);
 
     
       std::vector<std::shared_ptr<const IndexMap> > index_maps
@@ -104,7 +104,7 @@ namespace dolfin {
         std::size_t dofs[3];
         for (VertexIterator v(mesh); !v.end(); ++v)
         {
-          for (int sub = 0; sub < 3; ++sub)  // iterate over the 3 subspaces
+          for (int sub = 0; sub < 3; ++sub)   // iterate over the 3 subspaces
           {
             dofs[0] = _v2d[9*v->index() + 3*sub];
             dofs[1] = _v2d[9*v->index() + 3*sub + 1];
