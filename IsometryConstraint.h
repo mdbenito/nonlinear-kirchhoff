@@ -22,10 +22,9 @@ namespace dolfin {
                        const VertexFunction<bool>& boundary_marker);
     
     void update_with(const Function& Y);
-    std::shared_ptr<const Matrix> get() { return _B; }
-    std::shared_ptr<const Matrix> get_transposed() { return _Bt; }
+    std::shared_ptr<Matrix> get() { return _B; }
+    std::shared_ptr<Matrix> get_transposed() { return _Bt; }
   };
 }
-
 
 #endif // __ISOMETRY_CONSTRAINT_H
