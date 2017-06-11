@@ -7,6 +7,7 @@
 #include <petscmat.h>
 #include <petscsys.h>
 
+#include "IsometryConstraint.h"
 #include "KirchhoffAssembler.h"
 #include "NonlinearKirchhoff.h"
 #include "output.h"
@@ -44,8 +45,8 @@ class RightBoundary : public SubDomain
 // https://herbsutter.com/2013/05/30/gotw-90-solution-factories/
 // But everyone expects a shared_ptr and I just don't wan't to be writing
 // std::shared_ptr<const Function> f(std::move(project_dkt...))
-//std::unique_ptr<Function>
-std::shared_ptr<Function>
+std::unique_ptr<Function>
+// std::shared_ptr<Function>
 project_dkt(std::shared_ptr<const GenericFunction> what,
             std::shared_ptr<const FunctionSpace> where)
 {
@@ -62,7 +63,6 @@ project_dkt(std::shared_ptr<const GenericFunction> what,
   return f;
 }
 
-#if 0
 /* 
  *
  */
@@ -87,7 +87,7 @@ dostuff(void)
   double tau = mesh->hmin();
 
   // Initial data: careful that it fulfils the BCs.
-  auto y0 = project_dkt(std::make_shared<Constant>({0,0,0}), W3);
+  auto y0 = project_dkt(std::make_shared<Constant>(0, 0, 0), W3);
   
   // The discretised isometry constraint includes the condition for
   // the nodes on the Dirichlet boundary to be zero. This ensures that
@@ -96,11 +96,10 @@ dostuff(void)
   auto  left = std::make_shared<LeftBoundary>();  
   auto right = std::make_shared<RightBoundary>();
   VertexFunction<bool> dirichlet_boundary(mesh, false);
-  left.mark(dirichlet_boundary, true);
-  right.mark(dirichlet_boundary, true);
-  IsometryConstraint B(W3, dirichlet_boundary);
+  left->mark(dirichlet_boundary, true);
+  right->mark(dirichlet_boundary, true);
+  IsometryConstraint B(*W3, dirichlet_boundary);
   
-  Function y(W3);
 
   // Upper left block in the full matrix (constant)
   auto A = std::make_shared<Matrix>();
@@ -108,74 +107,96 @@ dostuff(void)
   // Lower right block:
   // HACK: I really don't know how to create an empty 4x4 Matrix,
   // so I use PETSc... duh
-  Mat* tmpMat;
-  MatCreateDense(mesh.mpi_comm(), 4, 4, 4, 4, NULL, tmpMat);
+  Mat tmpMat;
+  MatCreateDense(mesh->mpi_comm(), 4, 4, 4, 4, NULL, &tmpMat);
   auto zeroMat = std::make_shared<PETScMatrix>(tmpMat);
   auto zeroVec = std::make_shared<Vector>();
-  zeroMat->init_vector(*zeroVec, 0);
+  zeroMat->init_vector(*zeroVec, 0);   // second arg is dim, meaning *zeroVec = Ax for some x
   
   BlockMatrix Mk(2, 2);
   Mk.set_block(0, 0, A);
-  Mk.set_block(1, 1, Zero);
+  Mk.set_block(1, 1, zeroMat);
 
   Table table("Assembly and application of BCs");
   
   std::cout << "Projecting force onto W^3... ";
   tic();
   auto force = std::make_shared<Force>();
-  auto f = project_dkt(force, W3);
+  auto f = std::shared_ptr<const Function>(std::move(project_dkt(force, W3)));
   table("Projection", "time") = toc();
   std::cout << "Done.\n";
 
   std::cout << "Assembling bilinear form... ";
   NonlinearKirchhoff::Form_dkt a(W3, W3);
-  NonlinearKirchhoff::Form_p22 p22(Th3, Th3);
+  NonlinearKirchhoff::Form_p22 p22(T3, T3);
   tic();
   assembler.assemble(*A, a, p22);
-  auto Ao = A.copy();   // Store copy to use in the computation of the RHS
+  auto Ao = A->copy();   // Store copy to use in the computation of the RHS
   *A *= 1 + alpha*tau;  // Because we transform A here
   table("Form assembly", "time") = toc();
   std::cout << "Done.\n";
 
   std::cout << "Assembling force vector... ";
-  NonlinearKirchhoff::Form_force L(W3);
-  Vector b;
+  NonlinearKirchhoff::Form_force l(W3);
+  Vector L;
   tic();
-  L.f = f;
-  rhs_assembler.assemble(b, L);
+  l.f = f;
+  rhs_assembler.assemble(L, l);
   table("Force assembly", "time") = toc();
   std::cout << "Done.\n";
 
 
-  auto dkt_grad = DKTGradient()
-  auto Fk = std::make_shared<Vector>();  // Non-zero part of the RHS at step k
+  // Setup system solution at step k: The first block is the update
+  // for the deformation y_{k+1}, the second is ignored (its just 4
+  // entries so it shouldn't hurt performance anyway)
+  auto dtY = std::make_shared<Vector>();
+  auto ignored = std::make_shared<Vector>();
+  A->init_vector(*dtY, 0);
+  zeroMat->init_vector(*ignored, 0);
+  BlockVector dtY_L(2);
+  dtY_L.set_block(0, dtY);
+  dtY_L.set_block(1, ignored);
+  Function y(*y0);       // Deformation y_{k+1}, begin with initial condition
+
+  // Setup right hand side at step k. The content of the first block
+  // is set in the loop, the second is always zero
+  BlockVector Fk(2);
   auto tmp = std::make_shared<Vector>();
+  A->init_vector(*tmp, 0);  // second arg is dim, meaning *tmp = Ax for some x
+  Fk.set_block(0, tmp);
+  Fk.set_block(1, zeroVec);
+
   bool stop = false;
-  while (! stop) {
+  int max_steps = 10;          
+  while (! stop && max_steps > 0) {
+    max_steps--;
     std::cout << "Computing RHS... ";
     tic();
     // This isn't exactly elegant...
-    A.mult(*y.vector(), *tmp);
-    *tmp -= *b.vector();
+    A->mult(*(y.vector()), *tmp);
+    *tmp -= L;
     *tmp *= -tau;
-    table("Compute RHS", "time") += toc();
-    Fk.set_block(0, tmp);
-    Mk.set_block(1, zeroVec);
+    table("Compute RHS", "time") =
+            table.get_value("Compute RHS", "time") + toc();
     std::cout << "Done.\n";
     
     std::cout << "Updating discrete isometry constraint... ";
     tic();
     B.update_with(y);
-    table("Update constraint", "time") += toc();
+    table("Update constraint", "time") =
+            table.get_value("Update constraint", "time") + toc();
     Mk.set_block(1, 0, B.get());
     Mk.set_block(0, 1, B.get_transposed());
     std::cout << "Done.\n";
 
     std::cout << "Solving... ";
     tic();
-    solver.solve(Mk, *(yy.vector()), Fk);
-    table("Solution", "time") += toc();
+    // BlockMatrix is not a GenericLinearOperator, so that solve() cannot handle it
+    // solver.solve(Mk, dtY_L, Fk);
+    // table("Solution", "time") = table.get_value("Solution", "time") + toc();
     std::cout << "Done.\n";
+
+    y.vector()->axpy(-tau, *dtY);  // y = y - tau*dty
   }
   
   // info(table);  // outputs "<Table of size 5 x 1>"
@@ -190,17 +211,18 @@ dostuff(void)
   // std::cout << std::endl;
   // Save solution in VTK format
   File file("solution.pvd");
-  file << u;
+  file << y;
   
   return 1;
 }
-#endif
+
 
 int
 main(void)
 {
   auto mesh = std::make_shared<RectangleMesh>(MPI_COMM_WORLD,
-                                              Point (0, -M_PI/2), Point (M_PI, M_PI/2),
+                                              Point (0, -M_PI/2),
+                                              Point (M_PI, M_PI/2),
                                               1, 1);//, "crossed");
   auto W3 = std::make_shared<NonlinearKirchhoff::Form_dkt_FunctionSpace_0>(mesh);
   auto T3 = std::make_shared<NonlinearKirchhoff::Form_p22_FunctionSpace_0>(mesh);
@@ -209,7 +231,8 @@ main(void)
 
   dump_full_tensor(*(y0->vector()), 1);
 
-  for (CellIterator cell(*mesh); !cell.end(); ++cell) {
+  for (CellIterator cell(*mesh); !cell.end(); ++cell)
+  {
     auto dofs = W3->dofmap()->cell_dofs(cell->index());
     std::cout << "Cell: " << cell->index() << ", DOFs: ";
     for (int i = 0; i < dofs.size()-1; ++i)
@@ -222,5 +245,4 @@ main(void)
 
   // dostuff();
   return 1;
-  
 }
