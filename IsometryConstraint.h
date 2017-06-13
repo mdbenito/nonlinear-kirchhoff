@@ -16,7 +16,10 @@ namespace dolfin {
     /// A copy of the transposed Constraint matrix. Stored for speed.
     /// TODO: test whether this is indeed faster
     std::shared_ptr<Matrix> _Bt;
-    
+
+    std::shared_ptr<TensorLayout> _B_tensor_layout;
+    std::shared_ptr<TensorLayout> _Bt_tensor_layout;
+
   public:
     IsometryConstraint(const FunctionSpace& W,
                        const VertexFunction<bool>& boundary_marker);

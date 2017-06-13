@@ -30,27 +30,27 @@ namespace dolfin {
     // const auto& v2d = W.dofmap()->dofs(mesh, 0);
 
     {
-      auto tensor_layout = _B->factory().create_layout(2);  // 2 is the rank
-      dolfin_assert(tensor_layout);  // what for?
+      _B_tensor_layout = _B->factory().create_layout(2);  // 2 is the rank
+      dolfin_assert(_B_tensor_layout);  // what for?
 
       // FIXME: is this ok? every process should own a 4xN block
       auto row_index_map = std::make_shared<IndexMap>(mesh.mpi_comm(), 4, 1);
       // row_index_map->set_local_to_global(vector of global indices beyond local range);
 
     
-      std::vector<std::shared_ptr<const IndexMap> > index_maps
+      std::vector<std::shared_ptr<const IndexMap>> index_maps
       { row_index_map, W.dofmap()->index_map() };
 
       auto local_column_range = W.dofmap()->ownership_range();
 
-      tensor_layout->init(mesh.mpi_comm(), index_maps,
+      _B_tensor_layout->init(mesh.mpi_comm(), index_maps,
                           TensorLayout::Ghosts::UNGHOSTED);
 
-      SparsityPattern& pattern = *tensor_layout->sparsity_pattern();
+      SparsityPattern& pattern = *_B_tensor_layout->sparsity_pattern();
       pattern.init(mesh.mpi_comm(), index_maps);
     
       // _Build sparsity pattern
-      if (tensor_layout->sparsity_pattern())
+      if (_B_tensor_layout->sparsity_pattern())
       {
         std::size_t dofs[3];  // in order: point eval, dx, dy
         for (VertexIterator v(mesh); !v.end(); ++v)
@@ -73,33 +73,33 @@ namespace dolfin {
         }
         pattern.apply();
       }
-      _B->init(*tensor_layout); 
+      _B->init(*_B_tensor_layout); 
     }
 
     // This is me being lazy and sloppy...
     
     {
-      auto tensor_layout = _Bt->factory().create_layout(2);  // 2 is the rank
-      dolfin_assert(tensor_layout);  // what for?
+      _Bt_tensor_layout = _Bt->factory().create_layout(2);  // 2 is the rank
+      dolfin_assert(_Bt_tensor_layout);  // what for?
 
       // FIXME: is this ok? every process should own a Nx4 block
       auto col_index_map = std::make_shared<IndexMap>(mesh.mpi_comm(), 4, 1);
       // col_index_map->set_local_to_global(vector of global indices beyond local range);
 
     
-      std::vector<std::shared_ptr<const IndexMap> > index_maps
+      std::vector<std::shared_ptr<const IndexMap>> index_maps
       { W.dofmap()->index_map(), col_index_map };
 
       auto local_row_range = W.dofmap()->ownership_range();
 
-      tensor_layout->init(mesh.mpi_comm(), index_maps,
+      _Bt_tensor_layout->init(mesh.mpi_comm(), index_maps,
                           TensorLayout::Ghosts::UNGHOSTED);
 
-      SparsityPattern& pattern = *tensor_layout->sparsity_pattern();
+      SparsityPattern& pattern = *_Bt_tensor_layout->sparsity_pattern();
       pattern.init(mesh.mpi_comm(), index_maps);
     
       // _Build sparsity pattern
-      if (tensor_layout->sparsity_pattern())
+      if (_Bt_tensor_layout->sparsity_pattern())
       {
         std::size_t dofs[3];
         for (VertexIterator v(mesh); !v.end(); ++v)
@@ -120,7 +120,7 @@ namespace dolfin {
         }
         pattern.apply();
       }
-      _Bt->init(*tensor_layout);
+      _Bt->init(*_Bt_tensor_layout);
     }
   }
   
