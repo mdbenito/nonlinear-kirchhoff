@@ -2,6 +2,7 @@
 #include <iomanip>
 #include <numeric>
 #include <vector>
+#include <tuple>
 #include <dolfin.h>
 
 #include <petscmat.h>
@@ -63,6 +64,39 @@ project_dkt(std::shared_ptr<const GenericFunction> what,
   return f;
 }
 
+typedef
+std::tuple<PetscInt, PetscInt, std::vector<PetscInt>, std::vector<std::vector<PetscInt>>>
+nnz_data_t;
+
+// UNTESTED:
+nnz_data_t
+extract_nonzeros(const PETScMatrix& M)
+{
+  std::vector<PetscInt> nzrows;
+  std::vector<std::vector<PetscInt>> nzcols;
+  
+  // do stuff
+  auto m = M.mat();
+  PetscInt rstart = 0, rend = 0, nrows = 0, ncols = 0; 
+  MatGetOwnershipRange(m, &rstart, &rend);
+  nrows = rend - rstart;
+  PetscInt** cols;
+  for (auto irow = rstart; irow < rend; ++irow)
+  {  
+    MatGetRow(m, irow, &ncols, cols, NULL);
+    if (ncols > 0)
+    {
+      nzrows.push_back(irow);
+      nzcols.push_back(std::vector<PetscInt>(cols, cols+ncols));
+    }
+    MatRestoreRow(m, irow, &ncols, cols, NULL);   // free memory
+  }
+  // FIXME: will this move the vectors or copy them?
+  // Note: could use list-init {} in C++17
+  return std::make_tuple(M.size(0), M.size(1), nzrows, nzcols);
+}
+
+
 /* 
  *
  */
@@ -112,13 +146,19 @@ dostuff(void)
   auto zeroMat = std::make_shared<PETScMatrix>(tmpMat);
   auto zeroVec = std::make_shared<Vector>();
   zeroMat->init_vector(*zeroVec, 0);   // second arg is dim, meaning *zeroVec = Ax for some x
-  
+  // I would like to do this, but BlockMatrix is not a
+  // GenericLinearOperator, so that solve() cannot handle it and
+  //     solver.solve(Mk, dtY_L, Fk);
+  // fails.
+  /*
   BlockMatrix Mk(2, 2);
   Mk.set_block(0, 0, A);
+  Mk.set_block(1, 0, B.get());
+  Mk.set_block(0, 1, B.get_transposed());
   Mk.set_block(1, 1, zeroMat);
-
+  */
   Table table("Assembly and application of BCs");
-  
+   
   std::cout << "Projecting force onto W^3... ";
   tic();
   auto force = std::make_shared<Force>();
@@ -185,14 +225,11 @@ dostuff(void)
     B.update_with(y);
     table("Update constraint", "time") =
             table.get_value("Update constraint", "time") + toc();
-    Mk.set_block(1, 0, B.get());
-    Mk.set_block(0, 1, B.get_transposed());
     std::cout << "Done.\n";
-
+    // solver.solve(Mk, dtY_L, Fk);
     std::cout << "Solving... ";
     tic();
-    // BlockMatrix is not a GenericLinearOperator, so that solve() cannot handle it
-    // solver.solve(Mk, dtY_L, Fk);
+    
     // table("Solution", "time") = table.get_value("Solution", "time") + toc();
     std::cout << "Done.\n";
 
