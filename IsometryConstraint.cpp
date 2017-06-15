@@ -12,7 +12,7 @@ namespace dolfin {
     const Mesh& mesh = *(W.mesh());
 
     // TODO Check that W is a DKT vector space with 3 components
-    if (W.dim() != 9*mesh.size_global(0))
+    if (W.dim() != 9 * mesh.size_global(0))
     {
       dolfin_error("IsometryConstraint.cpp",
                    "initialise discrete isometry constraint",

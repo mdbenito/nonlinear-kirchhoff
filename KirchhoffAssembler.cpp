@@ -20,7 +20,7 @@
 #include <dolfin/fem/Form.h>
 #include <dolfin/fem/UFC.h>
 #include <dolfin/fem/FiniteElement.h>
-#include <dolfin/fem/OpenMpAssembler.h>
+// #include <dolfin/fem/OpenMpAssembler.h>
 #include <dolfin/fem/AssemblerBase.h>
 
 #include <dolfin/la/GenericMatrix.h>
