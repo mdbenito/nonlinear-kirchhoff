@@ -144,7 +144,7 @@ BlockMatrixAdapter::rebuild()
 
 
 void
-BlockMatrixAdapter::update_block(int i, int j)
+BlockMatrixAdapter::update(int i, int j)
 {
   auto B = _AA->get_block(i,j);
   la_index ioff = 0, joff = 0;

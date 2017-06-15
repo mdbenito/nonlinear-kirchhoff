@@ -26,7 +26,7 @@ namespace dolfin {
       : _AA(AA) { rebuild(); }
 
     void rebuild();
-    void update_block(int i, int j);
+    void update(int i, int j);
   };
   
 };
