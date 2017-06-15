@@ -8,9 +8,10 @@
 #include <petscmat.h>
 #include <petscsys.h>
 
+#include "NonlinearKirchhoff.h"
 #include "IsometryConstraint.h"
 #include "KirchhoffAssembler.h"
-#include "NonlinearKirchhoff.h"
+#include "BlockMatrixAdapter.h"
 #include "output.h"
 
 using namespace dolfin;
@@ -118,11 +119,11 @@ dostuff(void)
   // BlockMatrix is not a GenericLinearOperator, so that solve()
   // cannot handle it and solver.solve(block_Mk, block_dtY_L, block_Fk);
   // fails.
-  BlockMatrix block_Mk(2, 2);
-  block_Mk.set_block(0, 0, A);
-  block_Mk.set_block(1, 0, B.get());
-  block_Mk.set_block(0, 1, B.get_transposed());
-  block_Mk.set_block(1, 1, zeroMat);
+  auto block_Mk = std::make_shared<BlockMatrix>(2, 2);
+  block_Mk->set_block(0, 0, A);
+  block_Mk->set_block(1, 0, B.get());
+  block_Mk->set_block(0, 1, B.get_transposed());
+  block_Mk->set_block(1, 1, zeroMat);
 
   // HACK: copy (!) the blocks into one big matrix.
   BlockMatrixAdapter Mk(block_Mk);
@@ -155,7 +156,7 @@ dostuff(void)
   l.f = f;
   rhs_assembler.assemble(L, l);
   table("Force assembly", "time") = toc();
-  std::cout << "Done.\n";Block
+  std::cout << "Done.\n";
 
 
   // Setup system solution at step k: The first block is the update
@@ -165,9 +166,9 @@ dostuff(void)
   auto ignored = std::make_shared<Vector>();
   A->init_vector(*dtY, 0);
   zeroMat->init_vector(*ignored, 0);
-  BlockVector block_dtY_L(2);
-  block_dtY_L.set_block(0, dtY);
-  block_dtY_L.set_block(1, ignored);
+  auto block_dtY_L = std::make_shared<BlockVector>(2);
+  block_dtY_L->set_block(0, dtY);
+  block_dtY_L->set_block(1, ignored);
   
   BlockVectorAdapter dtY_L(block_dtY_L);
   dty_L.rebuild();
@@ -176,11 +177,11 @@ dostuff(void)
 
   // Setup right hand side at step k. The content of the first block
   // is set in the loop, the second is always zero
-  BlockVector block_Fk(2);
+  auto block_Fk = std::make_shared<BlockVector>(2);
   auto top_Fk = std::make_shared<Vector>();
   A->init_vector(*top_Fk, 0);  // second arg is dim, meaning *top_Fk = Ax for some x
-  block_Fk.set_block(0, top_Fk);
-  block_Fk.set_block(1, zeroVec);
+  block_Fk->set_block(0, top_Fk);
+  block_Fk->set_block(1, zeroVec);
 
   BlockVectorAdapter Fk(block_Fk);
   Fk.rebuild();
@@ -208,7 +209,7 @@ dostuff(void)
     table("Update constraint", "time") =
       table.get_value("Update constraint", "time") + toc();
     std::cout << "Done.\n";
-    solver.solve(Mk, dtY_L, Fk);
+    solver.solve(Mk.get(), dtY_L.get(), Fk.get());
     std::cout << "Solving... ";
     tic();
     

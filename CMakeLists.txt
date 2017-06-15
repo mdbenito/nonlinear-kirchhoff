@@ -78,6 +78,7 @@ add_executable(${PROJECT_NAME} ${FFC_GENERATED_SOURCES}
   KirchhoffAssembler.cpp
   DKTGradient.cpp
   BlockMatrixAdapter.cpp
+  BlockVectorAdapter.cpp
   output.cpp
   main.cpp)
 
