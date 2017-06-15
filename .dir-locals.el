@@ -3,7 +3,7 @@
 
 ((nil .
       ((compile-command . "cd build && make -k -j4")
-       (cmake-ide-build-dir . "/docker:fenics@fenics-dev:/home/fenics/local/src/nonlinear-kirchhoff/build")
+       (cmake-ide-build-dir . "/home/fenics/local/src/nonlinear-kirchhoff/build")
        (c-basic-offset . 2)
        (c-default-style . "linux"))))
 
