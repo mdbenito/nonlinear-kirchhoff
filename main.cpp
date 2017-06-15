@@ -109,22 +109,23 @@ dostuff(void)
   // Lower right block:
   // HACK: I really don't know how to create an empty 4x4 Matrix,
   // so I use PETSc... duh
-  Mat tmpMat;
-  MatCreateDense(mesh->mpi_comm(), 4, 4, 4, 4, NULL, &tmpMat);
-  auto zeroMat = std::make_shared<PETScMatrix>(tmpMat);
+  Mat tmp;
+  MatCreateDense(mesh->mpi_comm(), 4, 4, 4, 4, NULL, &tmp);
+  auto zeroMat = std::make_shared<PETScMatrix>(tmp);
   auto zeroVec = std::make_shared<Vector>();
   zeroMat->init_vector(*zeroVec, 0);   // second arg is dim, meaning *zeroVec = Ax for some x
-  // I would like to do this, but BlockMatrix is not a
-  // GenericLinearOperator, so that solve() cannot handle it and
-  //     solver.solve(Mk, dtY_L, Fk);
+  // I would like to solve the system defined by a BlockMatrix, but
+  // BlockMatrix is not a GenericLinearOperator, so that solve()
+  // cannot handle it and solver.solve(block_Mk, block_dtY_L, block_Fk);
   // fails.
-  /*
-  BlockMatrix Mk(2, 2);
-  Mk.set_block(0, 0, A);
-  Mk.set_block(1, 0, B.get());
-  Mk.set_block(0, 1, B.get_transposed());
-  Mk.set_block(1, 1, zeroMat);
-  */
+  BlockMatrix block_Mk(2, 2);
+  block_Mk.set_block(0, 0, A);
+  block_Mk.set_block(1, 0, B.get());
+  block_Mk.set_block(0, 1, B.get_transposed());
+  block_Mk.set_block(1, 1, zeroMat);
+
+  // HACK: copy (!) the blocks into one big matrix.
+  BlockMatrixAdapter Mk(block_Mk);
   Table table("Assembly and application of BCs");
   
   std::cout << "Projecting force onto W^3... ";
@@ -144,6 +145,9 @@ dostuff(void)
   table("Form assembly", "time") = toc();
   std::cout << "Done.\n";
 
+  Mk.rebuild(); // This requires that the nonzeros for the blocks be already set up
+  Mk.update(0,0);
+  
   std::cout << "Assembling force vector... ";
   NonlinearKirchhoff::Form_force l(W3);
   Vector L;
@@ -151,7 +155,7 @@ dostuff(void)
   l.f = f;
   rhs_assembler.assemble(L, l);
   table("Force assembly", "time") = toc();
-  std::cout << "Done.\n";
+  std::cout << "Done.\n";Block
 
 
   // Setup system solution at step k: The first block is the update
@@ -161,19 +165,26 @@ dostuff(void)
   auto ignored = std::make_shared<Vector>();
   A->init_vector(*dtY, 0);
   zeroMat->init_vector(*ignored, 0);
-  BlockVector dtY_L(2);
-  dtY_L.set_block(0, dtY);
-  dtY_L.set_block(1, ignored);
+  BlockVector block_dtY_L(2);
+  block_dtY_L.set_block(0, dtY);
+  block_dtY_L.set_block(1, ignored);
+  
+  BlockVectorAdapter dtY_L(block_dtY_L);
+  dty_L.rebuild();
+
   Function y(*y0);       // Deformation y_{k+1}, begin with initial condition
 
   // Setup right hand side at step k. The content of the first block
   // is set in the loop, the second is always zero
-  BlockVector Fk(2);
-  auto tmp = std::make_shared<Vector>();
-  A->init_vector(*tmp, 0);  // second arg is dim, meaning *tmp = Ax for some x
-  Fk.set_block(0, tmp);
-  Fk.set_block(1, zeroVec);
+  BlockVector block_Fk(2);
+  auto top_Fk = std::make_shared<Vector>();
+  A->init_vector(*top_Fk, 0);  // second arg is dim, meaning *top_Fk = Ax for some x
+  block_Fk.set_block(0, top_Fk);
+  block_Fk.set_block(1, zeroVec);
 
+  BlockVectorAdapter Fk(block_Fk);
+  Fk.rebuild();
+  
   bool stop = false;
   int max_steps = 10;          
   while (! stop && max_steps > 0) {
@@ -181,20 +192,23 @@ dostuff(void)
     std::cout << "Computing RHS... ";
     tic();
     // This isn't exactly elegant...
-    A->mult(*(y.vector()), *tmp);
-    *tmp -= L;
-    *tmp *= -tau;
+    A->mult(*(y.vector()), *top_Fk);
+    *top_Fk -= L;
+    *top_Fk *= -tau;
+    Fk.update(0);
     table("Compute RHS", "time") =
-            table.get_value("Compute RHS", "time") + toc();
+      table.get_value("Compute RHS", "time") + toc();
     std::cout << "Done.\n";
     
     std::cout << "Updating discrete isometry constraint... ";
     tic();
     B.update_with(y);
+    Mk.update(0,1);  // This is *extremely* inefficient. At least I could
+    Mk.update(1,0);  // update B in place inside Mk.
     table("Update constraint", "time") =
-            table.get_value("Update constraint", "time") + toc();
+      table.get_value("Update constraint", "time") + toc();
     std::cout << "Done.\n";
-    // solver.solve(Mk, dtY_L, Fk);
+    solver.solve(Mk, dtY_L, Fk);
     std::cout << "Solving... ";
     tic();
     
