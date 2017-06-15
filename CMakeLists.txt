@@ -77,6 +77,7 @@ add_executable(${PROJECT_NAME} ${FFC_GENERATED_SOURCES}
   IsometryConstraint.cpp
   KirchhoffAssembler.cpp
   DKTGradient.cpp
+  BlockMatrixAdapter.cpp
   output.cpp
   main.cpp)
 

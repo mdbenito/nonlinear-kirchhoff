@@ -54,7 +54,7 @@ project_dkt(std::shared_ptr<const GenericFunction> what,
   Matrix Ap;
   Vector bp;
   LUSolver solver;
-
+  
   NonlinearKirchhoff::Form_project_lhs project_lhs(where, where);
   NonlinearKirchhoff::Form_project_rhs project_rhs(where);
   std::unique_ptr<Function> f(new Function(where));
@@ -62,38 +62,6 @@ project_dkt(std::shared_ptr<const GenericFunction> what,
   assemble_system(Ap, bp, project_lhs, project_rhs, {});
   solver.solve(Ap, *(f->vector()), bp);
   return f;
-}
-
-typedef
-std::tuple<PetscInt, PetscInt, std::vector<PetscInt>, std::vector<std::vector<PetscInt>>>
-nnz_data_t;
-
-// UNTESTED:
-nnz_data_t
-extract_nonzeros(const PETScMatrix& M)
-{
-  std::vector<PetscInt> nzrows;
-  std::vector<std::vector<PetscInt>> nzcols;
-  
-  // do stuff
-  auto m = M.mat();
-  PetscInt rstart = 0, rend = 0, nrows = 0, ncols = 0; 
-  MatGetOwnershipRange(m, &rstart, &rend);
-  nrows = rend - rstart;
-  PetscInt** cols;
-  for (auto irow = rstart; irow < rend; ++irow)
-  {  
-    MatGetRow(m, irow, &ncols, cols, NULL);
-    if (ncols > 0)
-    {
-      nzrows.push_back(irow);
-      nzcols.push_back(std::vector<PetscInt>(cols, cols+ncols));
-    }
-    MatRestoreRow(m, irow, &ncols, cols, NULL);   // free memory
-  }
-  // FIXME: will this move the vectors or copy them?
-  // Note: could use list-init {} in C++17
-  return std::make_tuple(M.size(0), M.size(1), nzrows, nzcols);
 }
 
 
@@ -158,7 +126,7 @@ dostuff(void)
   Mk.set_block(1, 1, zeroMat);
   */
   Table table("Assembly and application of BCs");
-   
+  
   std::cout << "Projecting force onto W^3... ";
   tic();
   auto force = std::make_shared<Force>();
