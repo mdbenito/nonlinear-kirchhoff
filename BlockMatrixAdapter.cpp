@@ -1,4 +1,5 @@
 #include <stdexcept>
+#include <algorithm>
 #include <dolfin.h>
 #include <dolfin/la/PETScMatrix.h>
 #include "BlockMatrixAdapter.h"
@@ -21,7 +22,6 @@ extract_nonzeros(const PETScMatrix& M, nz_data_t& nzentries,
   std::size_t nnz = 0;
 
   // auto local_range = M.local_range(0);    // local row (0th dim) range
-  // do stuff
   auto m = M.mat();
   PetscInt rstart = 0, rend = 0, ncols = 0;
   MatGetOwnershipRange(m, &rstart, &rend);
@@ -58,13 +58,17 @@ extract_nonzeros(const PETScMatrix& M, nz_data_t& nzentries,
 /// scratch. This is useful only when the size of the blocks
 /// changes. To update values in the aggregated matrix use
 /// update_block() or update()
+/// NOTE:
+/// "Some algorithms require diagonal entries, so it's sometimes
+/// better to preallocate them and put an explicit zero (...) than to
+/// skip them"
 void
 BlockMatrixAdapter::rebuild()
 {
   auto nrows = _AA->size(0);
   auto ncols = _AA->size(1);
   
-  ///// Extract row and column offsets (in the aggregated matrix) for the blocks
+  //// Extract row and column offsets for the blocks in _A
   std::size_t w = 0, h = 0;
 
   _row_offsets.empty();
@@ -85,7 +89,7 @@ BlockMatrixAdapter::rebuild()
   }      
   _ncols = w;  // total number of cols
 
-  // iterate block rows, cols to extract sparsity
+  //// iterate block rows & cols to extract sparsity
   nz_data_t nzentries;
   std::size_t nnz = 0;
   for (int i = 0; i < nrows; ++i)
@@ -93,17 +97,12 @@ BlockMatrixAdapter::rebuild()
     for (int j = 0; j < ncols; ++j)
     {
       const auto& B = _AA->get_block(i, j);
-      nnz += extract_nonzeros(as_type<const PETScMatrix>(*B), nzentries, _row_offsets[i], _col_offsets[j]);
+      nnz += extract_nonzeros(as_type<const PETScMatrix>(*B), nzentries,
+                              _row_offsets[i], _col_offsets[j]);
     }
   }
 
-
-  // "Some algorithms require diagonal entries, so it's sometimes
-  // better to preallocate them and put an explicit zero (...) than to
-  // skip them"
-
-
-  // rebuild _A
+  // (re)build _A
 
   // This has length nrows+1, so the length of the last row is known
   std::vector<PetscInt> row_indices_in_col_indices;
@@ -140,6 +139,8 @@ BlockMatrixAdapter::rebuild()
 
   MatAssemblyBegin(m, MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(m, MAT_FINAL_ASSEMBLY);
+  // FIXME: I should ensure that there are no references left around
+  _A = std::make_shared<PETScMatrix>(m);
 }
 
 
@@ -147,6 +148,16 @@ void
 BlockMatrixAdapter::update(int i, int j)
 {
   auto B = _AA->get_block(i,j);
-  la_index ioff = 0, joff = 0;
-  
+  auto roff = _row_offsets.at(i), coff = _col_offsets.at(j);
+  auto range = B->local_range(0);    // local row (0th dim) range
+  for (auto r = range.first; r < range.second; ++r)
+  {
+    std::vector<std::size_t> columns;
+    std::vector<double> values;
+    B->getrow(r, columns, values);
+    std::transform(columns.begin(), columns.end(), columns.begin(),
+                   [&coff] (std::size_t x) { return x+coff; });
+    _A->setrow(r+roff, columns, values);
+  }
+  _A->apply("insert");
 }

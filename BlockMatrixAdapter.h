@@ -7,7 +7,7 @@
 namespace dolfin {
 
   class BlockMatrix;
-  class Matrix;
+  class PETScMatrix;
   
   /// Ideally I'd implmement the interface of a GenericLinearOperator,
   /// but I don't know how hard that could become if solve() is to be
@@ -15,8 +15,8 @@ namespace dolfin {
   /// sparsity patterns of the blocks and copying the data.
   class BlockMatrixAdapter
   {
-    std::shared_ptr<const BlockMatrix> _AA;
-    std::shared_ptr<Matrix> _A;
+    std::shared_ptr<const BlockMatrix> _AA;   // Block matrix
+    std::shared_ptr<PETScMatrix> _A;          // Flat matrix
     std::vector<std::size_t> _row_offsets;
     std::vector<std::size_t> _col_offsets;
 
@@ -27,9 +27,8 @@ namespace dolfin {
 
     void rebuild();
     void update(int i, int j);
-  };
-  
-};
+  };  
+}
 
 
 #endif // __BLOCK_MATRIX_ADAPTER_H
