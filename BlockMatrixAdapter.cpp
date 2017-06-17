@@ -6,8 +6,12 @@
 #include <dolfin/log/Logger.h>
 #include "BlockMatrixAdapter.h"
 #include <petscmat.h>
+#include <dolfin/la/PETScObject.h>
 
 using namespace dolfin;
+#define TEST_PETSC_ERROR(__ierr, __funname) \
+  if (__ierr != 0) PETScObject::petsc_error(__ierr, __FILE__, __funname);
+
 
 // BlockMatrixAdapter::BlockMatrixAdapter(std::shared_ptr<const BlockMatrix> AA)
 
@@ -28,11 +32,16 @@ extract_nonzeros(const PETScMatrix& M, nz_data_t& nzentries,
   // auto local_range = M.local_range(0);    // local row (0th dim) range
   auto m = M.mat();
   PetscInt rstart = 0, rend = 0, ncols = 0;
-  MatGetOwnershipRange(m, &rstart, &rend);
+  PetscErrorCode ierr;
+  ierr = MatGetOwnershipRange(m, &rstart, &rend);
+  TEST_PETSC_ERROR(ierr, "MatGetOwnershipRange");
+  
   const PetscInt** cols;  // const ptr to buffer, allocated by PETSc
   for (auto irow = rstart; irow < rend; ++irow)
   {
-    MatGetRow(m, irow, &ncols, cols, NULL);
+    ierr = MatGetRow(m, irow, &ncols, cols, NULL);
+    TEST_PETSC_ERROR(ierr, "MatGetRow");
+
     if (ncols > 0)
     {
       std::vector<PetscInt> nzcols(ncols);
@@ -57,7 +66,8 @@ extract_nonzeros(const PETScMatrix& M, nz_data_t& nzentries,
         nzentries.emplace(std::make_pair(irow + roffset, std::move(nzcols)));
       nnz += ncols;
     }
-    MatRestoreRow(m, irow, &ncols, cols, NULL);   // free memory in *cols
+    ierr = MatRestoreRow(m, irow, &ncols, cols, NULL);   // free memory in *cols
+    TEST_PETSC_ERROR(ierr, "MatRestoreRow");
   }
   return nnz;
 }
@@ -133,20 +143,30 @@ BlockMatrixAdapter::rebuild()
     }
   }
 
-  // FIXME: all of that getting the ranges and parallel stuff is obviously
-  // useless if I create a sequential matrix here...
-  
+  // FIXME: all of that getting the ranges and parallel stuff is
+  // obviously useless if I create a sequential matrix here...
+  // FIXME: I should use dolfin's GenericMatrix interface instead of
+  // forcing a dependency on PETSc
   Mat m;
-  MatCreate(MPI_COMM_WORLD, &m);
-  MatSetType(m, MATSEQAIJ);
-  MatSetSizes(m, PETSC_DECIDE, PETSC_DECIDE, _nrows, _ncols);
+  PetscErrorCode ierr;
+  
+  ierr = MatCreate(MPI_COMM_WORLD, &m);
+  TEST_PETSC_ERROR(ierr,"MatCreate");
+  ierr = MatSetType(m, MATSEQAIJ);
+  TEST_PETSC_ERROR(ierr,"MatSetType");
+  ierr = MatSetSizes(m, PETSC_DECIDE, PETSC_DECIDE, _nrows, _ncols);
+  TEST_PETSC_ERROR(ierr,"MatSetSizes");
   // This copies the index dat (which is ok, we seldom call rebuild())
   // TODO: I could use the data from the matrices
-  MatSeqAIJSetPreallocationCSR(m, row_indices_in_col_indices.data(),
-                               col_indices.data(), NULL);
+  ierr = MatSeqAIJSetPreallocationCSR(m, row_indices_in_col_indices.data(),
+                                      col_indices.data(), NULL);
+  TEST_PETSC_ERROR(ierr,"MatSeqAIJSetPreallocationCSR");
 
-  MatAssemblyBegin(m, MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(m, MAT_FINAL_ASSEMBLY);
+  ierr = MatAssemblyBegin(m, MAT_FINAL_ASSEMBLY);
+  TEST_PETSC_ERROR(ierr,"MatAssemblyBegin");
+  ierr = MatAssemblyEnd(m, MAT_FINAL_ASSEMBLY);
+  TEST_PETSC_ERROR(ierr,"MatAssemblyEnd");
+
   // FIXME: I should ensure that there are no references left around
   _A = std::make_shared<PETScMatrix>(m);
 }

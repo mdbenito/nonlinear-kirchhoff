@@ -3,10 +3,12 @@
 #include <vector>
 #include <dolfin.h>
 #include <dolfin/la/PETScVector.h>
+#include <dolfin/la/PETScObject.h>
 #include "BlockVectorAdapter.h"
-// #include <petscvec.h>
 
 using namespace dolfin;
+#define TEST_PETSC_ERROR(__ierr, __funname) \
+  if (__ierr != 0) PETScObject::petsc_error(__ierr, __FILE__, __funname);
 
 
 // BlockVectorAdapter::BlockVectorAdapter(std::shared_ptr<const BlockVector> AA)
@@ -23,6 +25,7 @@ void
 BlockVectorAdapter::rebuild()
 {
   auto nrows = _VV->size();
+  PetscErrorCode ierr;
   
   //// Extract row offsets for the blocks in _VV
   std::size_t l = 0;
@@ -44,7 +47,8 @@ BlockVectorAdapter::rebuild()
   // the blocks in the BlockVector) into whatever the global ordering
   // is.
   Vec v;
-  VecCreateSeq(MPI_COMM_WORLD, _nrows, &v);
+  ierr = VecCreateSeq(MPI_COMM_WORLD, _nrows, &v);
+  TEST_PETSC_ERROR(ierr, "VecCreateSeq")
 
   // FIXME: I should ensure that there are no references left around
   _V = std::make_shared<PETScVector>(v);
