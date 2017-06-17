@@ -25,8 +25,14 @@ namespace dolfin {
     BlockMatrixAdapter(std::shared_ptr<const BlockMatrix> AA)
       : _AA(AA) { rebuild(); }
 
+    /// Initialise offsets and patterns of non zeros from blocks in
+    /// the BlockMatrix
     void rebuild();
-    void update(int i, int j);
+    /// Read the contents of the blocks into the flattened Matrix
+    void read(int i, int j);
+
+    const PETScMatrix& get() const { return *_A; }
+    PETScMatrix& get() { return *_A; }
   };  
 }
 

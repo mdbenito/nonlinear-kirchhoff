@@ -145,7 +145,7 @@ BlockMatrixAdapter::rebuild()
 
 
 void
-BlockMatrixAdapter::update(int i, int j)
+BlockMatrixAdapter::read(int i, int j)
 {
   auto B = _AA->get_block(i,j);
   auto roff = _row_offsets.at(i), coff = _col_offsets.at(j);

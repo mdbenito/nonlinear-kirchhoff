@@ -15,17 +15,24 @@ namespace dolfin {
   /// sparsity patterns of the blocks and copying the data.
   class BlockVectorAdapter
   {
-    std::shared_ptr<const BlockVector> _AA;   // Block vector
-    std::shared_ptr<PETScVector> _A;          // Flat vector
+    std::shared_ptr<BlockVector> _VV;   // Block vector
+    std::shared_ptr<PETScVector> _V;          // Flat vector
     std::vector<std::size_t> _row_offsets;
-
     std::size_t _nrows;
-  public:
-    BlockVectorAdapter(std::shared_ptr<const BlockVector> AA)
-      : _AA(AA) { }
 
+  public:
+    BlockVectorAdapter(std::shared_ptr<BlockVector> VV)
+      : _VV(VV) { }
+
+    /// Initialise offsets from blocks in the BlockVector
     void rebuild();
-    void update(int i);
+    /// Read the contents of the blocks into the flattened Vector
+    void read(int i);
+    /// Write the contents of the flattened Vector into a block
+    void write(int i);
+
+    const PETScVector& get() const { return *_V; }
+    PETScVector& get() { return *_V; }
   };  
 }
 
