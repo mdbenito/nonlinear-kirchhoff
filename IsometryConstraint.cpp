@@ -40,41 +40,42 @@ namespace dolfin {
 
     
       std::vector<std::shared_ptr<const IndexMap>> index_maps
-      { row_index_map, W.dofmap()->index_map() };
+        { row_index_map, W.dofmap()->index_map() };
 
       auto local_column_range = W.dofmap()->ownership_range();
 
       _B_tensor_layout->init(mesh.mpi_comm(), index_maps,
-                          TensorLayout::Ghosts::UNGHOSTED);
+                             TensorLayout::Ghosts::UNGHOSTED);
 
-      SparsityPattern& pattern = *_B_tensor_layout->sparsity_pattern();
-      pattern.init(mesh.mpi_comm(), index_maps);
-    
-      // _Build sparsity pattern
-      if (_B_tensor_layout->sparsity_pattern())
+      auto pattern = _B_tensor_layout->sparsity_pattern();
+      dolfin_assert(pattern);   // when can the pattern be null?
+
+      pattern->init(mesh.mpi_comm(), index_maps);
+      // Build sparsity pattern
+      std::size_t dofs[3];  // in order: point eval, dx, dy
+      for (VertexIterator v(mesh); !v.end(); ++v)
       {
-        std::size_t dofs[3];  // in order: point eval, dx, dy
-        for (VertexIterator v(mesh); !v.end(); ++v)
+        if (boundary_marker[*v])
+          continue;
+        for (int sub = 0; sub < 3; ++sub)  // iterate over the 3 subspaces
         {
-          if (boundary_marker[*v])
-            continue;
-          for (int sub = 0; sub < 3; ++sub)  // iterate over the 3 subspaces
-          {
-            dofs[0] = _v2d[9*v->index() + 3*sub];
-            dofs[1] = _v2d[9*v->index() + 3*sub + 1];
-            dofs[2] = _v2d[9*v->index() + 3*sub + 2];
-        
-            pattern.insert_global(0, dofs[1]);
-            pattern.insert_global(1, dofs[1]);
-            pattern.insert_global(1, dofs[2]);
-            pattern.insert_global(2, dofs[1]);
-            pattern.insert_global(2, dofs[2]);
-            pattern.insert_global(3, dofs[2]);
-          }
+          dofs[0] = _v2d[9*v->index() + 3*sub];
+          dofs[1] = _v2d[9*v->index() + 3*sub + 1];
+          dofs[2] = _v2d[9*v->index() + 3*sub + 2];
+
+          pattern->insert_global(0, dofs[1]);
+          pattern->insert_global(1, dofs[1]);
+          pattern->insert_global(1, dofs[2]);
+          pattern->insert_global(2, dofs[1]);
+          pattern->insert_global(2, dofs[2]);
+          pattern->insert_global(3, dofs[2]);
         }
-        pattern.apply();
       }
-      _B->init(*_B_tensor_layout); 
+      pattern->apply();
+      _B->init(*_B_tensor_layout);
+      _B->apply("insert");
+      std::cout << "Initialised B with size " << _B->size(0) << " x " << _B->size(1) << "\n";
+      // std::cout << "Pattern:\n" << pattern->str(true) << "\n";
     }
 
     // This is me being lazy and sloppy...
@@ -94,34 +95,34 @@ namespace dolfin {
       auto local_row_range = W.dofmap()->ownership_range();
 
       _Bt_tensor_layout->init(mesh.mpi_comm(), index_maps,
-                          TensorLayout::Ghosts::UNGHOSTED);
+                              TensorLayout::Ghosts::UNGHOSTED);
 
-      SparsityPattern& pattern = *_Bt_tensor_layout->sparsity_pattern();
-      pattern.init(mesh.mpi_comm(), index_maps);
+      auto pattern = _Bt_tensor_layout->sparsity_pattern();
+      dolfin_assert(pattern)
+      pattern->init(mesh.mpi_comm(), index_maps);
     
       // _Build sparsity pattern
-      if (_Bt_tensor_layout->sparsity_pattern())
+      std::size_t dofs[3];
+      for (VertexIterator v(mesh); !v.end(); ++v)
       {
-        std::size_t dofs[3];
-        for (VertexIterator v(mesh); !v.end(); ++v)
+        for (int sub = 0; sub < 3; ++sub)   // iterate over the 3 subspaces
         {
-          for (int sub = 0; sub < 3; ++sub)   // iterate over the 3 subspaces
-          {
-            dofs[0] = _v2d[9*v->index() + 3*sub];
-            dofs[1] = _v2d[9*v->index() + 3*sub + 1];
-            dofs[2] = _v2d[9*v->index() + 3*sub + 2];
+          dofs[0] = _v2d[9*v->index() + 3*sub];
+          dofs[1] = _v2d[9*v->index() + 3*sub + 1];
+          dofs[2] = _v2d[9*v->index() + 3*sub + 2];
 
-            pattern.insert_global(dofs[1], 0);
-            pattern.insert_global(dofs[1], 1);
-            pattern.insert_global(dofs[1], 2);
-            pattern.insert_global(dofs[2], 1);
-            pattern.insert_global(dofs[2], 2);
-            pattern.insert_global(dofs[2], 3);
-          }
+          pattern->insert_global(dofs[1], 0);
+          pattern->insert_global(dofs[1], 1);
+          pattern->insert_global(dofs[1], 2);
+          pattern->insert_global(dofs[2], 1);
+          pattern->insert_global(dofs[2], 2);
+          pattern->insert_global(dofs[2], 3);
         }
-        pattern.apply();
       }
+      pattern->apply();
       _Bt->init(*_Bt_tensor_layout);
+      std::cout << "Initialised Bt with size " << _Bt->size(0) << " x " << _Bt->size(1) << "\n";
+      // std::cout << "Pattern:\n" << pattern->str(true) << "\n";      
     }
   }
   
