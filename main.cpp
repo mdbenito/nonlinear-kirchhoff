@@ -54,6 +54,7 @@ std::unique_ptr<Function>
 project_dkt(std::shared_ptr<const GenericFunction> what,
             std::shared_ptr<const FunctionSpace> where)
 {
+   std::cout << "*** project_dkt ***" << "\n";
   Matrix Ap;
   Vector bp;
   LUSolver solver;
@@ -62,8 +63,11 @@ project_dkt(std::shared_ptr<const GenericFunction> what,
   NonlinearKirchhoff::Form_project_rhs project_rhs(where);
   std::unique_ptr<Function> f(new Function(where));
   project_rhs.g = what;  // g is a Coefficient in a P3 space (see .ufl)
+  std::cout << "    coefficient set." << "\n";
   assemble_system(Ap, bp, project_lhs, project_rhs, {});
+  std::cout << "    system assembled." << "\n";
   solver.solve(Ap, *(f->vector()), bp);
+  std::cout << "    system solved." << "\n";
   return f;
 }
 
@@ -79,7 +83,7 @@ dostuff(void)
   LUSolver solver;
   auto mesh = std::make_shared<RectangleMesh>(MPI_COMM_WORLD,
                                               Point (0, -M_PI/2), Point (M_PI, M_PI/2),
-                                              20, 20, "crossed");
+                                              1, 1); //, "crossed");
   auto W3 = std::make_shared<NonlinearKirchhoff::Form_dkt_FunctionSpace_0>(mesh);
   auto T3 = std::make_shared<NonlinearKirchhoff::Form_p22_FunctionSpace_0>(mesh);
 

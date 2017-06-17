@@ -16,7 +16,7 @@ if (EXISTS ${DOLFIN_USE_FILE})
 
   # Default build type (can be overridden by user)
   if (NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING
+    set(CMAKE_BUILD_TYPE "Debug" CACHE STRING
       "Choose the type of build, options are: Debug MinSizeRel Release RelWithDebInfo." FORCE)
   endif()
 

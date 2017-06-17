@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <dolfin.h>
 #include <dolfin/la/PETScMatrix.h>
+#include <dolfin/log/Progress.h>
+#include <dolfin/log/Logger.h>
 #include "BlockMatrixAdapter.h"
 #include <petscmat.h>
 
@@ -19,6 +21,8 @@ std::size_t
 extract_nonzeros(const PETScMatrix& M, nz_data_t& nzentries,
                  PetscInt roffset, PetscInt coffset)
 {
+  std::cout << "\n*** extract_nonzeros ***\n\n";
+  // std::cout << "    " << "\n";
   std::size_t nnz = 0;
 
   // auto local_range = M.local_range(0);    // local row (0th dim) range
@@ -27,17 +31,21 @@ extract_nonzeros(const PETScMatrix& M, nz_data_t& nzentries,
   MatGetOwnershipRange(m, &rstart, &rend);
   const PetscInt** cols;  // const ptr to buffer, allocated by PETSc
   for (auto irow = rstart; irow < rend; ++irow)
-  {  
+  {
     MatGetRow(m, irow, &ncols, cols, NULL);
     if (ncols > 0)
     {
       std::vector<PetscInt> nzcols(ncols);
-      std::cout << "Found row " << irow << " with "
-                << ncols << " nonzero columns.\n"
-                << "nzcols has size " << nzcols.size() << ".\n";
-      for (int i = 0; i < ncols; ++i)
-        nzcols.push_back(*((*cols)+i) + coffset);
+      std::cout << "    processing row " << irow << "\n";
+      std::cout << "      -> " << ncols <<" nonzero columns.\n"
+                << "      " << "nzcols has size " << nzcols.size() << ".\n"
+                << "      Pushing back: "; 
 
+      for (int i = 0; i < ncols; ++i)
+      {
+        std::cout << cols[0] << " , ";
+        nzcols.push_back(cols[0][i] + coffset);
+      }
       auto nzrow = nzentries.find(irow + roffset);
       if (nzrow != nzentries.end())
         // FIXME: Maybe I should insert in the larger one and swap, to
