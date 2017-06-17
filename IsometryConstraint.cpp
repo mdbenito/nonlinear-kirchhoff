@@ -1,5 +1,6 @@
 #include "IsometryConstraint.h"
 
+#include <dolfin.h>
 #include <dolfin/fem/fem_utils.h>
 
 namespace dolfin {

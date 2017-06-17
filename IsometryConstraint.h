@@ -3,13 +3,18 @@
 
 #include <vector>
 #include <memory>
-#include <dolfin.h>
 
 namespace dolfin {
 
+  class Matrix;
+  class FunctionSpace;
+  template <class T> class VertexFunction;
+  class Function;
+  class TensorLayout;
+  
   class IsometryConstraint
   {
-    std::vector<la_index> _v2d;
+    std::vector<int> _v2d;
     /// The Constraint matrix. This is going to be used in a BlockMatrix
     /// which requires shared ownership via a shared_ptr.
     std::shared_ptr<Matrix> _B;
