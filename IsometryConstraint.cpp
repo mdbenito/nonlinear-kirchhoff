@@ -59,7 +59,7 @@ namespace dolfin {
           continue;
         for (int sub = 0; sub < 3; ++sub)  // iterate over the 3 subspaces
         {
-          dofs[0] = _v2d[9*v->index() + 3*sub];
+          // dofs[0] = _v2d[9*v->index() + 3*sub];
           dofs[1] = _v2d[9*v->index() + 3*sub + 1];
           dofs[2] = _v2d[9*v->index() + 3*sub + 2];
 
@@ -73,7 +73,7 @@ namespace dolfin {
       }
       pattern->apply();
       _B->init(*_B_tensor_layout);
-      _B->apply("insert");
+      // _B->apply("insert");
       std::cout << "Initialised B with size " << _B->size(0) << " x " << _B->size(1) << "\n";
       // std::cout << "Pattern:\n" << pattern->str(true) << "\n";
     }
@@ -107,7 +107,7 @@ namespace dolfin {
       {
         for (int sub = 0; sub < 3; ++sub)   // iterate over the 3 subspaces
         {
-          dofs[0] = _v2d[9*v->index() + 3*sub];
+          // dofs[0] = _v2d[9*v->index() + 3*sub];
           dofs[1] = _v2d[9*v->index() + 3*sub + 1];
           dofs[2] = _v2d[9*v->index() + 3*sub + 2];
 
@@ -122,14 +122,14 @@ namespace dolfin {
       pattern->apply();
       _Bt->init(*_Bt_tensor_layout);
       std::cout << "Initialised Bt with size " << _Bt->size(0) << " x " << _Bt->size(1) << "\n";
-      // std::cout << "Pattern:\n" << pattern->str(true) << "\n";      
+      std::cout << "Pattern:\n" << pattern->str(true) << "\n";      
     }
   }
   
   void
   IsometryConstraint::update_with(const Function& y)
   {
-    la_index dofs[3];
+    la_index dofs[3] = {-1, -1, -1};
     la_index rows[4] = {0, 1, 2, 3};
     double values[4*3] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
@@ -139,35 +139,49 @@ namespace dolfin {
     
     for (VertexIterator v(mesh); !v.end(); ++v)
     {
-      dofs[0] = _v2d[v->index()];
-      dofs[1] = _v2d[v->index()+1];
-      dofs[2] = _v2d[v->index()+2];
+      // std::cout << "\nVertex " << v->index() ":\n\n";
+      for (int sub = 0; sub < 3; ++sub)   // iterate over the 3 subspaces
+      {
+        // dofs[0] = _v2d[9*v->index() + 3*sub];
+        dofs[1] = _v2d[9*v->index() + 3*sub + 1];
+        dofs[2] = _v2d[9*v->index() + 3*sub + 2];
 
-      // std::cout << "vertex: " << v->index() 
-      //           << ", dofs: " << dofs[0] << ", " << dofs[1] << ", " << dofs[2] << "\n";
+        // std::cout << "\nSubspace " << sub << ":\n";
+      
+        // Copy the values of y into the 4x3 chunk:
+        /* values[0] = 0.0; */    values[1]  = 2*Y[dofs[1]]; /*  values[2] =          0.0; */
+        /* values[3] = 0.0; */    values[4]  =   Y[dofs[2]];     values[5] =   Y[dofs[1]];
+        /* values[6] = 0.0; */    values[7]  =   Y[dofs[2]];     values[8] =   Y[dofs[1]];
+        /* values[9] = 0.0; */ /* values[10] =          0.0; */  values[11] = 2*Y[dofs[2]];
 
-      // Copy the values of y into the 4x3 chunk:
-      /* values[0] = 0.0; */    values[1]  = 2*Y[dofs[1]]; /*  values[2] =          0.0; */
-      /* values[3] = 0.0; */    values[4]  =   Y[dofs[2]];     values[5] =   Y[dofs[1]];
-      /* values[6] = 0.0; */    values[7]  =   Y[dofs[2]];     values[8] =   Y[dofs[1]];
-      /* values[9] = 0.0; */ /* values[10] =          0.0; */  values[11] = 2*Y[dofs[2]];
+        // std::cout << "Updating row " << rows[0] << " with " << values[1]
+        //           << " at dof " << dofs[1] << " for vertex " << v->index() << "\n";
+        _B->set(&(values[1]), 1, &(rows[0]), 1, &(dofs[1]));
+        // std::cout << "Updating row " << rows[1] << " with " << values[4] << ", " << values[5]
+        //           << " at dofs " << dofs[1] << ", " << dofs[2] << " for vertex " << v->index() << "\n";
+        _B->set(&(values[4]), 1, &(rows[1]), 2, &(dofs[1]));
+        // std::cout << "Updating row " << rows[2] << " with " << values[7] << ", " << values[8]
+        //           << " at dofs " << dofs[1] << ", " << dofs[2] << " for vertex " << v->index() << "\n";
+        _B->set(&(values[7]), 1, &(rows[2]), 2, &(dofs[1]));
+        // std::cout << "Updating row " << rows[3] << " with " << values[11]
+        //           << " at dof " << dofs[2] << " for vertex " << v->index() << "\n";
+        _B->set(&(values[11]), 1, &(rows[3]), 1, &(dofs[2]));
 
-      _B->set(&(values[1]), 1, &(rows[0]), 1, &(dofs[1]));
-      _B->set(&(values[4]), 1, &(rows[1]), 2, &(dofs[1]));
-      _B->set(&(values[7]), 1, &(rows[2]), 2, &(dofs[1]));
-      _B->set(&(values[11]), 1, &(rows[3]), 1, &(dofs[2]));
 
-
-      // Now transposed
-
-      // Copy the values of y into the 3x4 chunk:
-      /* values[0] = 0.0;          values[1] = 0.0;         values[2] = 0.0;          values[3] = 0.0; */
-      values[4] = 2*Y[dofs[1]]; values[5] = Y[dofs[2]];  values[6] = Y[dofs[1]];   /* values[7] = 0.0; */
-      /* values[8] = 0.0; */    values[9] = Y[dofs[2]];  values[10] = Y[dofs[1]]; values[11] = 2*Y[dofs[2]];
-
-      _B->set(&(values[4]), 1, &(dofs[1]), 3, &(rows[0]));
-      _B->set(&(values[9]), 1, &(dofs[2]), 3, &(rows[1]));
-
+        // Now transposed
+        // std::cout << "Transpose:\n";
+        // Copy the values of y into the 3x4 chunk:
+        /* values[0] = 0.0;          values[1] = 0.0;         values[2] = 0.0;          values[3] = 0.0; */
+        values[4] = 2*Y[dofs[1]]; values[5] = Y[dofs[2]];  values[6] = Y[dofs[1]];   /* values[7] = 0.0; */
+        /* values[8] = 0.0; */    values[9] = Y[dofs[2]];  values[10] = Y[dofs[1]]; values[11] = 2*Y[dofs[2]];
+      
+        // std::cout << "Updating row " << dofs[1] << " with " << values[4] << ", " << values[5] << ", " << values[6]
+        //           << " at col " << rows[0] << " for vertex " << v->index() << "\n";
+        _Bt->set(&(values[4]), 1, &(dofs[1]), 3, &(rows[0]));
+        // std::cout << "Updating row " << dofs[2] << " with " << values[9] << ", " << values[10] << ", " << values[11]
+        //           << " at col " << rows[1] << " for vertex " << v->index() << "\n";
+        _Bt->set(&(values[9]), 1, &(dofs[2]), 3, &(rows[1]));
+      }
     }
     _B->apply("insert");
     _Bt->apply("insert");
