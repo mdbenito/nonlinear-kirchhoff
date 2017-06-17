@@ -21,11 +21,10 @@ namespace dolfin {
     std::size_t _nrows;
 
   public:
+    /// Constructor. Takes a BlockVector and flattens it.
     BlockVectorAdapter(std::shared_ptr<BlockVector> VV)
-      : _VV(VV) { }
-
-    /// Initialise offsets from blocks in the BlockVector
-    void rebuild();
+      : _VV(VV) { assemble(); }
+    
     /// Read the contents of the blocks into the flattened Vector
     void read(int i);
     /// Write the contents of the flattened Vector into a block
@@ -33,6 +32,10 @@ namespace dolfin {
 
     const PETScVector& get() const { return *_V; }
     PETScVector& get() { return *_V; }
+
+  protected:
+    /// Initialise offsets from blocks in the BlockVector
+    void assemble();
   };  
 }
 

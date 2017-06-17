@@ -22,7 +22,7 @@ using namespace dolfin;
 /// better to preallocate them and put an explicit zero (...) than to
 /// skip them"
 void
-BlockVectorAdapter::rebuild()
+BlockVectorAdapter::assemble()
 {
   auto nrows = _VV->size();
   PetscErrorCode ierr;

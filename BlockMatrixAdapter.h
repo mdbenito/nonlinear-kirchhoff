@@ -22,17 +22,22 @@ namespace dolfin {
 
     std::size_t _nrows, _ncols;
   public:
+    /// Constructor. Takes a BlockMatrix and flattens it. All blocks
+    /// must already be initialised (sparsity patterns set), in
+    /// particular they need to be in a state in which they can be
+    /// queried for their entries.
     BlockMatrixAdapter(std::shared_ptr<const BlockMatrix> AA)
-      : _AA(AA) { rebuild(); }
+      : _AA(AA) { assemble(); }
 
-    /// Initialise offsets and patterns of non zeros from blocks in
-    /// the BlockMatrix
-    void rebuild();
     /// Read the contents of the blocks into the flattened Matrix
     void read(int i, int j);
 
     const PETScMatrix& get() const { return *_A; }
     PETScMatrix& get() { return *_A; }
+  protected:
+    /// Initialise offsets and patterns of non zeros from blocks in
+    /// the BlockMatrix
+    void assemble();
   };  
 }
 

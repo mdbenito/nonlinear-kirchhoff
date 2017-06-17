@@ -25,8 +25,7 @@ std::size_t
 extract_nonzeros(const PETScMatrix& M, nz_data_t& nzentries,
                  PetscInt roffset, PetscInt coffset)
 {
-  std::cout << "\n*** extract_nonzeros ***\n\n";
-  // std::cout << "    " << "\n";
+  std::cout << "Extracting nonzeros...\n";
   std::size_t nnz = 0;
 
   // auto local_range = M.local_range(0);    // local row (0th dim) range
@@ -42,7 +41,7 @@ extract_nonzeros(const PETScMatrix& M, nz_data_t& nzentries,
     ierr = MatGetRow(m, irow, &ncols, cols, NULL);
     TEST_PETSC_ERROR(ierr, "MatGetRow");
 
-    if (ncols > 0)
+    if (ncols > 0 && cols)
     {
       std::vector<PetscInt> nzcols(ncols);
       std::cout << "    processing row " << irow << "\n";
@@ -52,8 +51,8 @@ extract_nonzeros(const PETScMatrix& M, nz_data_t& nzentries,
 
       for (int i = 0; i < ncols; ++i)
       {
-        std::cout << cols[0] << " , ";
-        nzcols.push_back(cols[0][i] + coffset);
+        std::cout << (*cols)[i] << " , ";
+        nzcols.push_back((*cols)[i] + coffset);
       }
       auto nzrow = nzentries.find(irow + roffset);
       if (nzrow != nzentries.end())
@@ -81,8 +80,9 @@ extract_nonzeros(const PETScMatrix& M, nz_data_t& nzentries,
 /// better to preallocate them and put an explicit zero (...) than to
 /// skip them"
 void
-BlockMatrixAdapter::rebuild()
+BlockMatrixAdapter::assemble()
 {
+  std::cout << "Assembling flat matrix:\n";
   auto nrows = _AA->size(0);
   auto ncols = _AA->size(1);
   
@@ -114,6 +114,7 @@ BlockMatrixAdapter::rebuild()
   {
     for (int j = 0; j < ncols; ++j)
     {
+      std::cout << "Getting block (" << i << ", " << j << ")\n";
       const auto& B = _AA->get_block(i, j);
       nnz += extract_nonzeros(as_type<const PETScMatrix>(*B), nzentries,
                               _row_offsets[i], _col_offsets[j]);

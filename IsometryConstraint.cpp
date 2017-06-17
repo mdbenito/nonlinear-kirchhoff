@@ -122,7 +122,7 @@ namespace dolfin {
       pattern->apply();
       _Bt->init(*_Bt_tensor_layout);
       std::cout << "Initialised Bt with size " << _Bt->size(0) << " x " << _Bt->size(1) << "\n";
-      std::cout << "Pattern:\n" << pattern->str(true) << "\n";      
+      // std::cout << "Pattern:\n" << pattern->str(true) << "\n";      
     }
   }
   
