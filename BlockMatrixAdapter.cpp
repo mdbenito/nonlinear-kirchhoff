@@ -176,17 +176,56 @@ BlockMatrixAdapter::assemble()
 void
 BlockMatrixAdapter::read(int i, int j)
 {
-  auto B = _AA->get_block(i,j);
+  std::cout << "Reading from block (" << i << ", " << j << ").\n";
+  auto B = _AA->get_block(i, j);
+  auto mB = as_type<const PETScMatrix>(*B).mat();
   auto roff = _row_offsets.at(i), coff = _col_offsets.at(j);
   auto range = B->local_range(0);    // local row (0th dim) range
+  const PetscInt** cols;  // const ptr to buffer, allocated by PETSc
+  const PetscScalar** vals;  // const ptr to buffer, allocated by PETSc
+  PetscInt ncols;
+  PetscErrorCode ierr;
+  auto mA = as_type<PETScMatrix>(*_A).mat();
   for (auto r = range.first; r < range.second; ++r)
   {
+    /*
     std::vector<std::size_t> columns;
     std::vector<double> values;
     B->getrow(r, columns, values);
+    
     std::transform(columns.begin(), columns.end(), columns.begin(),
                    [&coff] (std::size_t x) { return x+coff; });
+    std::cout << "Reading row " << r << " into row " << r+roff
+              << " with " << values.size() << " values in columns:\n";
+    for (auto c: columns)
+      std::cout << c << ", ";
+    
     _A->setrow(r+roff, columns, values);
+    */
+    ierr = MatGetRow(mB, r, &ncols, cols, vals);
+    TEST_PETSC_ERROR(ierr, "MatGetRow");
+
+    if (cols)
+    {
+      std::vector<PetscInt> columns;
+      std::transform(*cols, (*cols) + ncols, columns.begin(),
+                     [&coff] (std::size_t x) { return x+coff; });
+
+      // for(int c = 0; c < ncols; ++c)
+      //   (*cols)[c] += coff;
+
+      PetscInt row = r+roff;
+      ierr = MatSetValues(mA, 1, &row, ncols, columns.data(), *vals, INSERT_VALUES);
+      TEST_PETSC_ERROR(ierr, "MatSetValues");
+    }
+    else
+    {
+      std::cout << "MatGetRow() returned no column indices for row " << r << "\n";
+    }
+    ierr = MatRestoreRow(mB, r, &ncols, cols, vals);   // free memory in *cols, *vals
+    TEST_PETSC_ERROR(ierr, "MatRestoreRow");
   }
-  _A->apply("insert");
+  // _A->apply("insert");
+  MatAssemblyBegin(mA, MAT_FINAL_ASSEMBLY);
+  MatAssemblyEnd(mA, MAT_FINAL_ASSEMBLY);
 }
