@@ -134,8 +134,8 @@ namespace dolfin {
     double values[4*3] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
     const auto& mesh = *(y.function_space()->mesh());
-    auto& Y = *y.vector();
-    assert(Y.local_range() == _B.local_range());
+    const auto& Y = *(y.vector());
+    // assert(Y.local_range() == _B.local_range());   // WTF??
     
     for (VertexIterator v(mesh); !v.end(); ++v)
     {
@@ -143,27 +143,33 @@ namespace dolfin {
       dofs[1] = _v2d[v->index()+1];
       dofs[2] = _v2d[v->index()+2];
 
-      // Copy the values of y into the 4x3 chunk:
-      values[0] = 0.0;     values[1]  = 2*Y[dofs[1]];     values[2] = 0.0;
-      values[3] = 0.0;     values[4]  =   Y[dofs[2]];     values[5] =   Y[dofs[1]];
-      values[6] = 0.0;     values[7]  =   Y[dofs[2]];     values[8] =   Y[dofs[1]];
-      values[9] = 0.0;     values[10] = 0.0;             values[11] = 2*Y[dofs[2]];
+      // std::cout << "vertex: " << v->index() 
+      //           << ", dofs: " << dofs[0] << ", " << dofs[1] << ", " << dofs[2] << "\n";
 
-      _B->set(values, 4, rows, 3, dofs);  // set() uses global indices
+      // Copy the values of y into the 4x3 chunk:
+      /* values[0] = 0.0; */    values[1]  = 2*Y[dofs[1]]; /*  values[2] =          0.0; */
+      /* values[3] = 0.0; */    values[4]  =   Y[dofs[2]];     values[5] =   Y[dofs[1]];
+      /* values[6] = 0.0; */    values[7]  =   Y[dofs[2]];     values[8] =   Y[dofs[1]];
+      /* values[9] = 0.0; */ /* values[10] =          0.0; */  values[11] = 2*Y[dofs[2]];
+
+      _B->set(&(values[1]), 1, &(rows[0]), 1, &(dofs[1]));
+      _B->set(&(values[4]), 1, &(rows[1]), 2, &(dofs[1]));
+      _B->set(&(values[7]), 1, &(rows[2]), 2, &(dofs[1]));
+      _B->set(&(values[11]), 1, &(rows[3]), 1, &(dofs[2]));
 
 
       // Now transposed
 
-      // Copy the values of y into the 4x3 chunk:
-      values[0] = 0.0;          values[1] = 0.0;         values[2] = 0.0;          values[3] = 0.0;
-      values[4] = 2*Y[dofs[1]]; values[5] = Y[dofs[2]];  values[6] = Y[dofs[1]];   values[7] = 0.0;
-      values[8] = 0.0;          values[9] = Y[dofs[2]];  values[10] = Y[dofs[1]]; values[11] = 2*Y[dofs[2]];
+      // Copy the values of y into the 3x4 chunk:
+      /* values[0] = 0.0;          values[1] = 0.0;         values[2] = 0.0;          values[3] = 0.0; */
+      values[4] = 2*Y[dofs[1]]; values[5] = Y[dofs[2]];  values[6] = Y[dofs[1]];   /* values[7] = 0.0; */
+      /* values[8] = 0.0; */    values[9] = Y[dofs[2]];  values[10] = Y[dofs[1]]; values[11] = 2*Y[dofs[2]];
 
-      _Bt->set(values, 3, dofs, 4, rows);
+      _B->set(&(values[4]), 1, &(dofs[1]), 3, &(rows[0]));
+      _B->set(&(values[9]), 1, &(dofs[2]), 3, &(rows[1]));
+
     }
     _B->apply("insert");
     _Bt->apply("insert");
   }
-
-  
 }
