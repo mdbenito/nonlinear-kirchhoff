@@ -12,7 +12,7 @@ namespace dolfin {
   void
   dump_full_tensor(const GenericMatrix& A, int precision)
   {
-    if (true)  // to do
+    if (false)  // TODO: use some flag to disable
       return;
     
     auto num_rows = A.size(0);
@@ -43,7 +43,7 @@ namespace dolfin {
   void
   dump_full_tensor(const GenericVector& A, int precision)
   {
-    if (true)  // to do
+    if (false)  // TODO: use some flag to disable
       return;
 
     auto num_entries = A.size(0);
