@@ -145,24 +145,25 @@ BlockMatrixAdapter::assemble()
   }
 
   // FIXME: all of that getting the ranges and parallel stuff is
-  // obviously useless if I create a sequential matrix here...
+  // obviously useless if I create a sequential matrix here, but most
+  // of the code will break if used in parallel.
   // FIXME: I should use dolfin's GenericMatrix interface instead of
   // forcing a dependency on PETSc
   Mat m;
   PetscErrorCode ierr;
-  
+
   ierr = MatCreate(MPI_COMM_WORLD, &m);
   TEST_PETSC_ERROR(ierr,"MatCreate");
-  ierr = MatSetType(m, MATSEQAIJ);
+  ierr = MatSetType(m, MATAIJ);
   TEST_PETSC_ERROR(ierr,"MatSetType");
   ierr = MatSetSizes(m, PETSC_DECIDE, PETSC_DECIDE, _nrows, _ncols);
   TEST_PETSC_ERROR(ierr,"MatSetSizes");
-  // This copies the index dat (which is ok, we seldom call rebuild())
+  // This copies the index data (which is ok, we seldom call rebuild())
   // TODO: I could use the data from the matrices
-  ierr = MatSeqAIJSetPreallocationCSR(m, row_indices_in_col_indices.data(),
+  // FIXME!! I'm using local indices as global and viceversa ALL OVER THE PLACE
+  ierr = MatMPIAIJSetPreallocationCSR(m, row_indices_in_col_indices.data(),
                                       col_indices.data(), NULL);
-  TEST_PETSC_ERROR(ierr,"MatSeqAIJSetPreallocationCSR");
-
+  TEST_PETSC_ERROR(ierr,"MatMPIAIJSetPreallocationCSR");
   ierr = MatAssemblyBegin(m, MAT_FINAL_ASSEMBLY);
   TEST_PETSC_ERROR(ierr,"MatAssemblyBegin");
   ierr = MatAssemblyEnd(m, MAT_FINAL_ASSEMBLY);

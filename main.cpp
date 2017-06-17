@@ -80,7 +80,8 @@ dostuff(void)
 {
   KirchhoffAssembler assembler;
   Assembler rhs_assembler;
-  LUSolver solver;
+  PETScLUSolver solver;
+  
   auto mesh = std::make_shared<RectangleMesh>(MPI_COMM_WORLD,
                                               Point (0, -M_PI/2), Point (M_PI, M_PI/2),
                                               1, 1); //, "crossed");
@@ -117,7 +118,10 @@ dostuff(void)
   // HACK: I really don't know how to create an empty 4x4 Matrix,
   // so I use PETSc... duh
   Mat tmp;
-  MatCreateSeqAIJ(MPI_COMM_WORLD, 4, 4, 0, NULL, &tmp);
+  MatCreateAIJ(MPI_COMM_WORLD, PETSC_DECIDE, PETSC_DECIDE, 4, 4, 0, NULL, 0, NULL, &tmp);
+  MatSetUp(tmp);
+  MatAssemblyBegin(tmp, MAT_FINAL_ASSEMBLY);
+  MatAssemblyEnd(tmp, MAT_FINAL_ASSEMBLY);
   auto zeroMat = std::make_shared<PETScMatrix>(tmp);
   auto zeroVec = std::make_shared<Vector>();
   zeroMat->init_vector(*zeroVec, 0);   // second arg is dim, meaning *zeroVec = Ax for some x

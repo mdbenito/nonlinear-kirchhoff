@@ -45,10 +45,14 @@ BlockVectorAdapter::assemble()
   // obviously useless if I create a sequential vector here, but I
   // don't know how to translate later the local offset indices (of
   // the blocks in the BlockVector) into whatever the global ordering
-  // is.
+  // is, so this will break badly if run on more than one process
   Vec v;
-  ierr = VecCreateSeq(MPI_COMM_WORLD, _nrows, &v);
-  TEST_PETSC_ERROR(ierr, "VecCreateSeq")
+  ierr = VecCreate(MPI_COMM_WORLD, &v);
+  TEST_PETSC_ERROR(ierr, "VecCreate");
+  ierr = VecSetType(v, VECMPI);
+  TEST_PETSC_ERROR(ierr, "VecCreate");
+  ierr = VecSetSizes(v, PETSC_DECIDE, _nrows);
+  TEST_PETSC_ERROR(ierr, "VecSetSizes");
 
   // FIXME: I should ensure that there are no references left around
   _V = std::make_shared<PETScVector>(v);
