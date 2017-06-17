@@ -54,7 +54,7 @@ std::unique_ptr<Function>
 project_dkt(std::shared_ptr<const GenericFunction> what,
             std::shared_ptr<const FunctionSpace> where)
 {
-   std::cout << "*** project_dkt ***" << "\n";
+  // std::cout << "project_dkt()" << "\n";
   Matrix Ap;
   Vector bp;
   LUSolver solver;
@@ -63,11 +63,11 @@ project_dkt(std::shared_ptr<const GenericFunction> what,
   NonlinearKirchhoff::Form_project_rhs project_rhs(where);
   std::unique_ptr<Function> f(new Function(where));
   project_rhs.g = what;  // g is a Coefficient in a P3 space (see .ufl)
-  std::cout << "    coefficient set." << "\n";
+  // std::cout << "    coefficient set." << "\n";
   assemble_system(Ap, bp, project_lhs, project_rhs, {});
-  std::cout << "    system assembled." << "\n";
+  // std::cout << "    system assembled." << "\n";
   solver.solve(Ap, *(f->vector()), bp);
-  std::cout << "    system solved." << "\n";
+  // std::cout << "    system solved." << "\n";
   return f;
 }
 
@@ -143,12 +143,14 @@ dostuff(void)
   tic();
   assembler.assemble(*A, a, p22);
   auto Ao = A->copy();   // Store copy to use in the computation of the RHS
-  *A *= 1 + alpha*tau;  // Because we transform A here
+  *A *= 1 + alpha*tau;   // Because we transform A here
   table("Form assembly", "time") = toc();
   std::cout << "Done.\n";
 
-  BlockMatrixAdapter Mk(block_Mk);
-  Mk.rebuild(); // This requires that the nonzeros for the blocks be already set up
+  // dump_full_tensor(*A, 2);
+  
+  // This requires that the nonzeros for the blocks be already set up
+  BlockMatrixAdapter Mk(block_Mk); 
   Mk.read(0,0);
   
   std::cout << "Assembling force vector... ";
@@ -173,7 +175,6 @@ dostuff(void)
   block_dtY_L->set_block(1, ignored);
   
   BlockVectorAdapter dtY_L(block_dtY_L);
-  dtY_L.rebuild();
 
   Function y(*y0);       // Deformation y_{k+1}, begin with initial condition
 
@@ -186,12 +187,15 @@ dostuff(void)
   block_Fk->set_block(1, zeroVec);
 
   BlockVectorAdapter Fk(block_Fk);
-  Fk.rebuild();
-  
+    
   bool stop = false;
-  int max_steps = 10;          
-  while (! stop && max_steps > 0) {
-    max_steps--;
+  int max_steps = 10;
+  int step = 0;
+  table("Compute RHS", "time") = 0;
+  table("Update constraint", "time") = 0;
+  table("Solution", "time") = 0;
+  while (! stop && ++step <= max_steps) {
+    std::cout << "\n## Step " << step << " ##\n\n";
     std::cout << "Computing RHS... ";
     tic();
     // This isn't exactly elegant...
@@ -216,7 +220,8 @@ dostuff(void)
     tic();
     solver.solve(Mk.get(), dtY_L.get(), Fk.get());
     dtY_L.write(0);  // Update block_dtY_L back from dty_L
-    // table("Solution", "time") = table.get_value("Solution", "time") + toc();
+    table("Solution", "time") =
+      table.get_value("Solution", "time") + toc();
     std::cout << "Done.\n";
 
     y.vector()->axpy(-tau, *dtY);  // y = y - tau*dty
