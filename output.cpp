@@ -1,20 +1,16 @@
 #include <iostream>
 #include <iomanip>
-
+#include <string>
 #include <dolfin.h>
-#include <Eigen/Dense>
 
 
 #include "output.h"
-
+#ifndef __OUTPUT_H //DISABLE_DUMP
 namespace dolfin {
 
   void
-  dump_full_tensor(const GenericMatrix& A, int precision)
-  {
-    if (false)  // TODO: use some flag to disable
-      return;
-    
+  dump_full_tensor(const GenericMatrix& A, int precision, const std::string& msg)
+  {    
     auto num_rows = A.size(0);
     auto num_cols = A.size(1);
 
@@ -25,9 +21,9 @@ namespace dolfin {
     
     std::vector<double> block(num_rows*num_cols);
 
-    // std::cout << "rows: " << num_rows
-    //           << ", cols: " << num_cols << "\n";
-    
+    if (msg.size() > 0)
+      std::cout << msg << ": ";
+
     A.get(block.data(), num_rows, rows.data(), num_cols, cols.data());
 
     std::cout << std::setprecision(precision);
@@ -41,16 +37,16 @@ namespace dolfin {
   }
 
   void
-  dump_full_tensor(const GenericVector& A, int precision)
+  dump_full_tensor(const GenericVector& A, int precision, const std::string& msg)
   {
-    if (false)  // TODO: use some flag to disable
-      return;
-
     auto num_entries = A.size(0);
 
     std::vector<double> block(num_entries);
 
     A.get_local(block);
+
+    if (msg.size() > 0)
+      std::cout << msg << ": ";
 
     std::cout << std::setprecision(precision);
     for (int i = 0; i < num_entries-1; i++)
@@ -59,3 +55,4 @@ namespace dolfin {
   }
 
 }
+#endif  // ifndef DISABLE_DUMP
