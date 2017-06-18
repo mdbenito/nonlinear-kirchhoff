@@ -191,8 +191,8 @@ BlockMatrixAdapter::read(int i, int j)
   auto mB = as_type<const PETScMatrix>(*B).mat();
   auto roff = _row_offsets.at(i), coff = _col_offsets.at(j);
   auto range = B->local_range(0);    // local row (0th dim) range
-  const PetscInt** cols;  // const ptr to buffer, allocated by PETSc
-  const PetscScalar** vals;  // const ptr to buffer, allocated by PETSc
+  const PetscInt* cols;     // allocated by PETSc
+  const PetscScalar* vals;  // allocated by PETSc
   PetscInt ncols;
   PetscErrorCode ierr;
   auto mA = as_type<PETScMatrix>(*_A).mat();
@@ -212,27 +212,23 @@ BlockMatrixAdapter::read(int i, int j)
     
     _A->setrow(r+roff, columns, values);
     */
-    ierr = MatGetRow(mB, r, &ncols, cols, vals);
+    ierr = MatGetRow(mB, r, &ncols, &cols, &vals);
     TEST_PETSC_ERROR(ierr, "MatGetRow");
 
-    if (cols)
+    if (ncols > 0)
     {
-      std::vector<PetscInt> columns;
-      std::transform(*cols, (*cols) + ncols, columns.begin(),
+      std::vector<PetscInt> columns(ncols);
+      std::transform(cols, cols + ncols, columns.begin(),
                      [&coff] (std::size_t x) { return x+coff; });
 
-      // for(int c = 0; c < ncols; ++c)
-      //   (*cols)[c] += coff;
-
       PetscInt row = r+roff;
-      ierr = MatSetValues(mA, 1, &row, ncols, columns.data(), *vals, INSERT_VALUES);
+      ierr = MatSetValues(mA, 1, &row, ncols, columns.data(), vals,
+                          INSERT_VALUES);
       TEST_PETSC_ERROR(ierr, "MatSetValues");
+
+      // std::cout << "\tWrote " << ncols << " values.\n";
     }
-    else
-    {
-      std::cout << "MatGetRow() returned no column indices for row " << r << "\n";
-    }
-    ierr = MatRestoreRow(mB, r, &ncols, cols, vals);   // free memory in *cols, *vals
+    ierr = MatRestoreRow(mB, r, &ncols, &cols, &vals);   // free memory in cols, vals
     TEST_PETSC_ERROR(ierr, "MatRestoreRow");
   }
   // _A->apply("insert");
