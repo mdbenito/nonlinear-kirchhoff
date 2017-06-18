@@ -21,11 +21,16 @@ typedef std::map<PetscInt, std::vector<PetscInt>> nz_data_t;
 /// UNTESTED: Extracts sparsity pattern from a PETScMatrix.
 /// out param: nzentries (std::map...)
 /// Returns total number of non zeros in M
+///
+/// IMPORTANT! We assume that we are called "from left to right" in
+/// the block matrix. That is: we process block (i,j) *after* block
+/// (i,j-1). This is important for the column indices returned in
+/// nzentries to be ordered.
 std::size_t
 extract_nonzeros(const PETScMatrix& M, nz_data_t& nzentries,
                  PetscInt roffset, PetscInt coffset)
 {
-  std::cout << "Extracting nonzeros...\n";
+  // std::cout << "Extracting nonzeros...\n";
   std::size_t nnz = 0;
 
   // auto local_range = M.local_range(0);    // local row (0th dim) range
@@ -35,37 +40,41 @@ extract_nonzeros(const PETScMatrix& M, nz_data_t& nzentries,
   ierr = MatGetOwnershipRange(m, &rstart, &rend);
   TEST_PETSC_ERROR(ierr, "MatGetOwnershipRange");
   
-  const PetscInt** cols;  // const ptr to buffer, allocated by PETSc
+  const PetscInt* cols;  // allocated by PETSc
+  std::vector<PetscInt> nzcols(M.size(1), -1);
   for (auto irow = rstart; irow < rend; ++irow)
   {
-    ierr = MatGetRow(m, irow, &ncols, cols, NULL);
+    // std::cout << "  Retrieving row " << irow << "...";
+    ierr = MatGetRow(m, irow, &ncols, &cols, NULL);
     TEST_PETSC_ERROR(ierr, "MatGetRow");
 
     if (ncols > 0 && cols)
     {
-      std::vector<PetscInt> nzcols(ncols);
-      std::cout << "    processing row " << irow << "\n";
-      std::cout << "      -> " << ncols <<" nonzero columns.\n"
-                << "      " << "nzcols has size " << nzcols.size() << ".\n"
-                << "      Pushing back: "; 
-
-      for (int i = 0; i < ncols; ++i)
-      {
-        std::cout << (*cols)[i] << " , ";
-        nzcols.push_back((*cols)[i] + coffset);
-      }
+      std::transform(cols, cols+ncols, nzcols.begin(),
+                     [&coffset](PetscInt c) { return c + coffset;});
       auto nzrow = nzentries.find(irow + roffset);
-      if (nzrow != nzentries.end())
+      if (nzrow != nzentries.end()) {
+        // std::cout << " appending " << ncols << " indices to previous "
+        //           << nzrow->second.size() << " ones.";
+
         // FIXME: Maybe I should insert in the larger one and swap, to
         // avoid copying too many entries...
-        nzrow->second.insert(nzrow->second.begin(), nzcols.begin(), nzcols.end());
-      else
+        nzrow->second.insert(nzrow->second.end(),
+                             nzcols.begin(), nzcols.begin()+ncols);
+      } else {
+        // std::cout << " adding new entry to nzentries with "
+        //           << ncols << " indices.";
         // FIXME: will this move the std::vector or copy it?
         // Should/could I use forwarding, whatever other stuff there is?
-        nzentries.emplace(std::make_pair(irow + roffset, std::move(nzcols)));
-      nnz += ncols;
+        nzentries.emplace(std::make_pair(irow + roffset,
+                               std::vector<PetscInt>(nzcols.begin(),
+                                                     nzcols.begin()+ncols)));
+      }
     }
-    ierr = MatRestoreRow(m, irow, &ncols, cols, NULL);   // free memory in *cols
+    nnz += ncols;
+    // std::cout << "\n";
+    // std::cout << " Found " << ncols << " non zero entries.\n";
+    ierr = MatRestoreRow(m, irow, &ncols, &cols, NULL);   // free memory in *cols
     TEST_PETSC_ERROR(ierr, "MatRestoreRow");
   }
   return nnz;
