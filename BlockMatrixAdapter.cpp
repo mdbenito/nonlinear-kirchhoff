@@ -1,5 +1,6 @@
 #include <stdexcept>
 #include <algorithm>
+#include <cassert>
 #include <dolfin.h>
 #include <dolfin/la/PETScMatrix.h>
 #include <dolfin/log/Progress.h>
@@ -123,14 +124,19 @@ BlockMatrixAdapter::assemble()
   {
     for (int j = 0; j < ncols; ++j)
     {
-      std::cout << "Getting block (" << i << ", " << j << ")\n";
+      // std::cout << "Extracting sparsity info from block ("
+      //           << i << ", " << j << ")\n";
       const auto& B = _AA->get_block(i, j);
       nnz += extract_nonzeros(as_type<const PETScMatrix>(*B), nzentries,
                               _row_offsets[i], _col_offsets[j]);
     }
   }
 
-  // (re)build _A
+  //// (re)build _A
+  //// We need to format the sparsity data into CSR for
+  // MatMPIAIJSetPreallocationCSR() and MatSeqAIJSetPreallocationCSR()
+  // NOTE: it is best to call both functions to avoid crashing when not
+  // working in either mode (sequential/parallel)
 
   // This has length nrows+1, so the length of the last row is known
   std::vector<PetscInt> row_indices_in_col_indices;
@@ -153,52 +159,78 @@ BlockMatrixAdapter::assemble()
     }
   }
 
+  std::cout << "Preallocating flat AIJ matrix of size "
+            << _nrows << " x " << _ncols << " with " << col_indices.size()
+            << " entries... ";
+  
+  assert(row_indices_in_col_indices.size() == _nrows+1);
+  assert(row_indices_in_col_indices.back() == col_indices.size());
+  
+  // std::cout << "\nRow indices in column array:\n";
+  // for (auto r: row_indices_in_col_indices)
+  //   std::cout << r << ", ";
+  // std::cout << "\n\nColumn indices:\n";
+  // for (auto c: col_indices)
+  //   std::cout << c << ", ";
+  // std::cout << "\n";
+  
   // FIXME: all of that getting the ranges and parallel stuff is
   // obviously useless if I create a sequential matrix here, but most
   // of the code will break if used in parallel.
   // FIXME: I should use dolfin's GenericMatrix interface instead of
   // forcing a dependency on PETSc
-  Mat m;
+  Mat mat;
   PetscErrorCode ierr;
 
-  ierr = MatCreate(MPI_COMM_WORLD, &m);
-  TEST_PETSC_ERROR(ierr,"MatCreate");
-  ierr = MatSetType(m, MATAIJ);
-  TEST_PETSC_ERROR(ierr,"MatSetType");
-  ierr = MatSetSizes(m, PETSC_DECIDE, PETSC_DECIDE, _nrows, _ncols);
-  TEST_PETSC_ERROR(ierr,"MatSetSizes");
+  ierr = MatCreate(MPI_COMM_WORLD, &mat);
+  TEST_PETSC_ERROR(ierr, "MatCreate");
+  ierr = MatSetType(mat, MATAIJ);
+  TEST_PETSC_ERROR(ierr, "MatSetType");
+  ierr = MatSetSizes(mat, _nrows, _ncols, _nrows, _ncols); // PETSC_DECIDE, PETSC_DECIDE, _nrows, _ncols);
+  TEST_PETSC_ERROR(ierr, "MatSetSizes");
+
+  // // HACK, TEST
+  // PetscInt lm, ln, gm, gn;
+  // MatGetLocalSize(mat, &lm, &ln);
+  // MatGetSize(mat, &gm, &gn);
+  // assert(lm == gm);
+  // assert(ln == gn);
+  
   // This copies the index data (which is ok, we seldom call rebuild())
-  // TODO: I could use the data from the matrices
+  // TODO: I could use the data from the matrices right away if available...
   // FIXME!! I'm using local indices as global and viceversa ALL OVER THE PLACE
-  ierr = MatMPIAIJSetPreallocationCSR(m, row_indices_in_col_indices.data(),
+  ierr = MatMPIAIJSetPreallocationCSR(mat, row_indices_in_col_indices.data(),
                                       col_indices.data(), NULL);
   TEST_PETSC_ERROR(ierr,"MatMPIAIJSetPreallocationCSR");
-  ierr = MatSeqAIJSetPreallocationCSR(m, row_indices_in_col_indices.data(),
+  ierr = MatSeqAIJSetPreallocationCSR(mat, row_indices_in_col_indices.data(),
                                       col_indices.data(), NULL);
   TEST_PETSC_ERROR(ierr,"MatSeqAIJSetPreallocationCSR");
-  ierr = MatAssemblyBegin(m, MAT_FLUSH_ASSEMBLY);
+  ierr = MatAssemblyBegin(mat, MAT_FLUSH_ASSEMBLY);
   TEST_PETSC_ERROR(ierr,"MatAssemblyBegin");
-  ierr = MatAssemblyEnd(m, MAT_FLUSH_ASSEMBLY);
+  ierr = MatAssemblyEnd(mat, MAT_FLUSH_ASSEMBLY);
   TEST_PETSC_ERROR(ierr,"MatAssemblyEnd");
 
+  std::cout << " aaaand wrapping to go!\n";
+
   // FIXME: I should ensure that there are no references left around
-  _A = std::make_shared<PETScMatrix>(m);
+  _A = std::make_shared<PETScMatrix>(mat);
 }
 
 
 void
 BlockMatrixAdapter::read(int i, int j)
 {
-  std::cout << "Reading from block (" << i << ", " << j << ").\n";
+  // std::cout << "Reading from block (" << i << ", " << j << ").\n";
   auto B = _AA->get_block(i, j);
-  auto mB = as_type<const PETScMatrix>(*B).mat();
+  Mat mB = as_type<const PETScMatrix>(*B).mat();
   auto roff = _row_offsets.at(i), coff = _col_offsets.at(j);
   auto range = B->local_range(0);    // local row (0th dim) range
   const PetscInt* cols;     // allocated by PETSc
   const PetscScalar* vals;  // allocated by PETSc
-  PetscInt ncols;
+  PetscInt row, ncols;
   PetscErrorCode ierr;
-  auto mA = as_type<PETScMatrix>(*_A).mat();
+  std::vector<PetscInt> columns(B->size(1), -1);
+  Mat mA = as_type<PETScMatrix>(*_A).mat();
   for (auto r = range.first; r < range.second; ++r)
   {
     /*
@@ -218,13 +250,27 @@ BlockMatrixAdapter::read(int i, int j)
     ierr = MatGetRow(mB, r, &ncols, &cols, &vals);
     TEST_PETSC_ERROR(ierr, "MatGetRow");
 
+    // std::cout << "\tReading row " << r << " into row " << r+roff
+    //           << " with " << ncols << " values.\n";// in columns: ";
+    // for (int i=0; i<ncols; ++i)
+    //   std::cout << cols[i] << ", ";
+    // std::cout << "\n";
+
     if (ncols > 0)
     {
-      std::vector<PetscInt> columns(ncols);
+      // std::cout << "Applying column offset of " << coff << ".\n"
+      //           << "Values are: ";
+      // for (int i=0; i<ncols; ++i)
+      //   std::cout << vals[i] << ", ";
       std::transform(cols, cols + ncols, columns.begin(),
                      [&coff] (std::size_t x) { return x+coff; });
 
-      PetscInt row = r+roff;
+      // std::cout << "\nAnd offset columns are: ";
+      // for (auto c: columns)
+      //   std::cout << c << ", ";
+      // std::cout << "\n";
+      
+      row = r+roff;
       ierr = MatSetValues(mA, 1, &row, ncols, columns.data(), vals,
                           INSERT_VALUES);
       TEST_PETSC_ERROR(ierr, "MatSetValues");
@@ -235,6 +281,8 @@ BlockMatrixAdapter::read(int i, int j)
     TEST_PETSC_ERROR(ierr, "MatRestoreRow");
   }
   // _A->apply("insert");
-  MatAssemblyBegin(mA, MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(mA, MAT_FINAL_ASSEMBLY);
+  ierr = MatAssemblyBegin(mA, MAT_FINAL_ASSEMBLY);
+  TEST_PETSC_ERROR(ierr, "MatAssemblyBegin");
+  ierr = MatAssemblyEnd(mA, MAT_FINAL_ASSEMBLY);
+  TEST_PETSC_ERROR(ierr, "MatAssemblyEnd");
 }
