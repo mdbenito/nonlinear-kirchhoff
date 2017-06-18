@@ -173,9 +173,12 @@ BlockMatrixAdapter::assemble()
   ierr = MatMPIAIJSetPreallocationCSR(m, row_indices_in_col_indices.data(),
                                       col_indices.data(), NULL);
   TEST_PETSC_ERROR(ierr,"MatMPIAIJSetPreallocationCSR");
-  ierr = MatAssemblyBegin(m, MAT_FINAL_ASSEMBLY);
+  ierr = MatSeqAIJSetPreallocationCSR(m, row_indices_in_col_indices.data(),
+                                      col_indices.data(), NULL);
+  TEST_PETSC_ERROR(ierr,"MatSeqAIJSetPreallocationCSR");
+  ierr = MatAssemblyBegin(m, MAT_FLUSH_ASSEMBLY);
   TEST_PETSC_ERROR(ierr,"MatAssemblyBegin");
-  ierr = MatAssemblyEnd(m, MAT_FINAL_ASSEMBLY);
+  ierr = MatAssemblyEnd(m, MAT_FLUSH_ASSEMBLY);
   TEST_PETSC_ERROR(ierr,"MatAssemblyEnd");
 
   // FIXME: I should ensure that there are no references left around
