@@ -42,19 +42,27 @@ class RightBoundary : public SubDomain
   }
 };
 
+class BoundaryData : public Expression
+{
+  void eval(Array<double>& values, const Array<double>& x) const
+  {
+    values[0] = x[0];
+    values[1] = x[1];
+    values[2] = 0;
+  }
+  std::size_t value_rank() const { return 1; }
+  std::size_t value_dimension(std::size_t i) const { return 3;}
+};
+
 
 /// In order for this to be general, I'd need to prepare a variational
 /// problem, compile it on the fly with ffc, etc.
 // I should be returning unique_ptr, remember your Gurus of the week...
 // https://herbsutter.com/2013/05/30/gotw-90-solution-factories/
-// But everyone expects a shared_ptr and I just don't wan't to be writing
-// std::shared_ptr<const Function> f(std::move(project_dkt...))
 std::unique_ptr<Function>
-// std::shared_ptr<Function>
 project_dkt(std::shared_ptr<const GenericFunction> what,
             std::shared_ptr<const FunctionSpace> where)
 {
-  // std::cout << "project_dkt()" << "\n";
   Matrix Ap;
   Vector bp;
   LUSolver solver;
@@ -96,8 +104,10 @@ dostuff(void)
   // and tau is the length of the sides, not the diagonal, i.e. hmin().
   double tau = mesh->hmin();
 
+  std::cout << "Using alpha = " << alpha << ", tau = " << tau << ".\n";
+
   // Initial data: careful that it fulfils the BCs.
-  auto y0 = project_dkt(std::make_shared<Constant>(0, 0, 0), W3);
+  auto y0 = project_dkt(std::make_shared<BoundaryData>(), W3);
   
   // The discretised isometry constraint includes the condition for
   // the nodes on the Dirichlet boundary to be zero. This ensures that
