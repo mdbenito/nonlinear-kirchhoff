@@ -91,8 +91,8 @@ dostuff(void)
   PETScLUSolver solver;
   
   auto mesh = std::make_shared<RectangleMesh>(MPI_COMM_WORLD,
-                                              Point (0, -M_PI/2), Point (M_PI, M_PI/2),
-                                              1, 1); //, "crossed");
+                                              Point (0.0, 0.0), Point (1.0, 1.0),
+                                              1, 1);//, "crossed");
   auto W3 = std::make_shared<NonlinearKirchhoff::Form_dkt_FunctionSpace_0>(mesh);
   auto T3 = std::make_shared<NonlinearKirchhoff::Form_p22_FunctionSpace_0>(mesh);
 
@@ -128,7 +128,7 @@ dostuff(void)
   // HACK: I really don't know how to create an empty 4x4 Matrix,
   // so I use PETSc... duh
   Mat tmp;
-  MatCreateAIJ(MPI_COMM_WORLD, PETSC_DECIDE, PETSC_DECIDE, 4, 4, 0, NULL, 0, NULL, &tmp);
+  MatCreateAIJ(MPI_COMM_WORLD, 4, 4, 4, 4, 0, NULL, 0, NULL, &tmp);
   MatSetUp(tmp);
   MatAssemblyBegin(tmp, MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(tmp, MAT_FINAL_ASSEMBLY);
@@ -156,16 +156,15 @@ dostuff(void)
   NonlinearKirchhoff::Form_p22 p22(T3, T3);
   tic();
   assembler.assemble(*A, a, p22);
-  auto Ao = A->copy();   // Store copy to use in the computation of the RHS
-  *A *= 1 + alpha*tau;   // Because we transform A here
+  auto Ao = A->copy();   // Store copy to use in the computation of the RHS,
+  *A *= 1 + alpha*tau;   // because we transform A here
   table("Form assembly", "time") = toc();
   std::cout << "Done.\n";
 
-  // dump_full_tensor(*A, 2);
-  
   // This requires that the nonzeros for the blocks be already set up
   BlockMatrixAdapter Mk(block_Mk); 
-  Mk.read(0,0);
+  Mk.read(0,0);  // Read in A, we read the rest in the loop
+  dump_full_tensor(Mk.get(), 2, "Mk");
   
   std::cout << "Assembling force vector... ";
   NonlinearKirchhoff::Form_force l(W3);
@@ -189,7 +188,8 @@ dostuff(void)
   block_dtY_L->set_block(1, ignored);
   
   BlockVectorAdapter dtY_L(block_dtY_L);
-
+  dump_full_tensor(dtY_L.get(), 2, "dtY_L");
+  
   Function y(*y0);       // Deformation y_{k+1}, begin with initial condition
 
   // Setup right hand side at step k. The content of the first block
@@ -201,9 +201,10 @@ dostuff(void)
   block_Fk->set_block(1, zeroVec);
 
   BlockVectorAdapter Fk(block_Fk);
-    
+  dump_full_tensor(Fk.get(), 2, "block_Fk");
+
   bool stop = false;
-  int max_steps = 10;
+  int max_steps = 3;
   int step = 0;
   table("Compute RHS", "time") = 0;
   table("Update constraint", "time") = 0;
@@ -233,7 +234,8 @@ dostuff(void)
     std::cout << "Solving... ";
     tic();
     solver.solve(Mk.get(), dtY_L.get(), Fk.get());
-    dtY_L.write(0);  // Update block_dtY_L back from dty_L
+    dump_full_tensor(dtY_L.get(), 3, "dtY_L");
+    dtY_L.write(0);  // Update block_dtY_L(0,0) back from dty_L
     table("Solution", "time") =
       table.get_value("Solution", "time") + toc();
     std::cout << "Done.\n";

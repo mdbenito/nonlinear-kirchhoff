@@ -1,5 +1,5 @@
 #include "IsometryConstraint.h"
-
+#include "output.h"
 #include <dolfin.h>
 #include <dolfin/fem/fem_utils.h>
 
@@ -129,6 +129,7 @@ namespace dolfin {
   void
   IsometryConstraint::update_with(const Function& y)
   {
+    
     la_index dofs[3] = {-1, -1, -1};
     la_index rows[4] = {0, 1, 2, 3};
     double values[4*3] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -136,6 +137,8 @@ namespace dolfin {
     const auto& mesh = *(y.function_space()->mesh());
     const auto& Y = *(y.vector());
     // assert(Y.local_range() == _B.local_range());   // WTF??
+    
+    dump_full_tensor(y, 3, "Updating constraint with Y = ");
     
     for (VertexIterator v(mesh); !v.end(); ++v)
     {
