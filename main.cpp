@@ -125,9 +125,9 @@ dostuff(void)
   // which should fulfill the BC
   auto  left = std::make_shared<LeftBoundary>();  
   auto right = std::make_shared<RightBoundary>();
-  VertexFunction<bool> dirichlet_boundary(mesh, false);
-  left->mark(dirichlet_boundary, true);
-  right->mark(dirichlet_boundary, true);
+  auto dirichlet_boundary = std::make_shared<VertexFunction<bool>>(mesh, false);
+  left->mark(*dirichlet_boundary, true);
+  right->mark(*dirichlet_boundary, true);
   
   std::cout << "Initialising constraint... ";
   IsometryConstraint B(*W3, dirichlet_boundary);
@@ -145,10 +145,10 @@ dostuff(void)
   auto A = std::make_shared<Matrix>();
 
   // Lower right block:
-  // HACK: I really don't know how to create an empty 4x4 Matrix,
+  // HACK: I really don't know how to create an empty 7x7 Matrix,
   // so I use PETSc... duh
   Mat tmp;
-  MatCreateAIJ(MPI_COMM_WORLD, 4, 4, 4, 4, 0, NULL, 0, NULL, &tmp);
+  MatCreateAIJ(MPI_COMM_WORLD, 7, 7, 7, 7, 0, NULL, 0, NULL, &tmp);
   MatSetUp(tmp);
   MatAssemblyBegin(tmp, MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(tmp, MAT_FINAL_ASSEMBLY);
@@ -195,7 +195,7 @@ dostuff(void)
 
 
   // Setup system solution at step k: The first block is the update
-  // for the deformation y_{k+1}, the second is ignored (its just 4
+  // for the deformation y_{k+1}, the second is ignored (its just 7
   // entries so it shouldn't hurt performance anyway)
   auto dtY = std::make_shared<Vector>();
   auto ignored = std::make_shared<Vector>();

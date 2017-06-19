@@ -5,9 +5,11 @@
 
 namespace dolfin {
 
-  IsometryConstraint::IsometryConstraint(const FunctionSpace& W,
-                                         const VertexFunction<bool>& boundary_marker)
+  IsometryConstraint::IsometryConstraint(
+      const FunctionSpace& W,
+      std::shared_ptr<const VertexFunction<bool>> boundary_marker)
     : _v2d(vertex_to_dof_map(W)),
+      _boundary(boundary_marker),
       _B(std::make_shared<Matrix>()), _Bt(std::make_shared<Matrix>())
   {
     const Mesh& mesh = *(W.mesh());
@@ -36,7 +38,7 @@ namespace dolfin {
 
       // FIXME: is this ok? every process should own a 4xN block
       std::cout << "\t\tCHECK ME: IndexMap should init all global indices as local.\n";
-      auto row_index_map = std::make_shared<IndexMap>(mesh.mpi_comm(), 4, 1);
+      auto row_index_map = std::make_shared<IndexMap>(mesh.mpi_comm(), 7, 1);
       row_index_map->set_local_to_global(std::vector<std::size_t>());  // OK?
 
       std::vector<std::shared_ptr<const IndexMap>> index_maps
@@ -55,15 +57,18 @@ namespace dolfin {
       std::size_t dofs[3];  // in order: point eval, dx, dy
       for (VertexIterator v(mesh); !v.end(); ++v)
       {
-        // Enforce homogeneous Dirichlet BCs by omitting dofs at
-        // Dirichlet nodes
-        if (boundary_marker[*v])
-          continue;
-
         // iterate over the 3 subspaces
         for (int sub = 0; sub < 3; ++sub)
         {
-          // dofs[0] = _v2d[9*v->index() + 3*sub];
+          // Enforce homogeneous Dirichlet BCs by fixing dofs at
+          // Dirichlet nodes
+          if ((*_boundary)[*v]) {
+            dofs[0] = _v2d[9*v->index() + 3*sub];
+            pattern->insert_global(4+sub, dofs[0]);
+            // std::cout <<"B: Dirichlet node at " << 4+sub << ", " << dofs[0] << "\n";
+            continue;
+          }
+          
           dofs[1] = _v2d[9*v->index() + 3*sub + 1];
           dofs[2] = _v2d[9*v->index() + 3*sub + 2];
 
@@ -107,15 +112,18 @@ namespace dolfin {
       std::size_t dofs[3];
       for (VertexIterator v(mesh); !v.end(); ++v)
       {
-        // Enforce homogeneous Dirichlet BCs by omitting dofs at
-        // Dirichlet nodes
-        if (boundary_marker[*v])
-          continue;
-
         // iterate over the 3 subspaces
         for (int sub = 0; sub < 3; ++sub)
         {
-          // dofs[0] = _v2d[9*v->index() + 3*sub];
+          // Enforce homogeneous Dirichlet BCs by fixing dofs at
+          // Dirichlet nodes
+          if ((*_boundary)[*v]) {
+            dofs[0] = _v2d[9*v->index() + 3*sub];
+            pattern->insert_global(dofs[0], 4+sub);
+            // std::cout <<"Bt: Dirichlet node at " << dofs[0] << ", " << 4+sub << "\n";
+            continue;
+          }
+
           dofs[1] = _v2d[9*v->index() + 3*sub + 1];
           dofs[2] = _v2d[9*v->index() + 3*sub + 2];
 
@@ -132,6 +140,36 @@ namespace dolfin {
       // std::cout << "Initialised Bt with size " << _Bt->size(0) << " x " << _Bt->size(1) << "\n";
       // std::cout << "Pattern:\n" << pattern->str(true) << "\n";      
     }
+
+    // more lazy me...
+    // Enforce homogeneous Dirichlet BCs by fixing dofs at
+    // Dirichlet nodes
+    la_index dofs[3];
+    la_index rows[3] = {4, 5, 6};
+    double value = 1.0;
+    for (VertexIterator v(mesh); !v.end(); ++v)
+    {
+      if ((*_boundary)[*v]) {
+        for (int sub = 0; sub < 3; ++sub)
+          dofs[sub] = _v2d[9*v->index() + 3*sub];
+        // std::cout << "Dirichlet at: ";
+        // for (int i =0; i<3; ++i)
+        //   std::cout << "(" << rows[i] << ", " << dofs[i] << ") ";        
+        // std::cout << "\n";
+        _B->set(&value, 1, &(rows[0]), 1, &(dofs[0]));
+        _B->set(&value, 1, &(rows[1]), 1, &(dofs[1]));
+        _B->set(&value, 1, &(rows[2]), 1, &(dofs[2]));
+        // for (int i =0; i<3; ++i)
+        //   std::cout << "(" << dofs[i] << ", " << rows[i] << ") ";
+        // std::cout << "\n";
+        _Bt->set(&value, 1, &(dofs[0]), 1, &(rows[0]));
+        _Bt->set(&value, 1, &(dofs[1]), 1, &(rows[1]));
+        _Bt->set(&value, 1, &(dofs[2]), 1, &(rows[2]));  
+      }
+    }
+    std::cout << "FIXME! IsometryConstraint: apply() at construction causes PETSc err out of bounds later\n";
+    // _B->apply("insert");
+    // _Bt->apply("insert");
   }
   
   void
@@ -148,10 +186,14 @@ namespace dolfin {
     
     for (VertexIterator v(mesh); !v.end(); ++v)
     {
+      // Enforce homogeneous Dirichlet BCs by omitting dofs at
+      // Dirichlet nodes
+      if ((*_boundary)[*v])
+        continue;
+
       // std::cout << "\nVertex " << v->index() ":\n\n";
       for (int sub = 0; sub < 3; ++sub)   // iterate over the 3 subspaces
       {
-        // dofs[0] = _v2d[9*v->index() + 3*sub];
         dofs[1] = _v2d[9*v->index() + 3*sub + 1];
         dofs[2] = _v2d[9*v->index() + 3*sub + 2];
 

@@ -25,6 +25,9 @@ namespace dolfin {
     /// TODO: test whether this is indeed faster
     std::shared_ptr<Matrix> _Bt;
 
+    /// This marks points on the Dirichlet boundary
+    std::shared_ptr<const VertexFunction<bool>> _boundary;
+    
     std::shared_ptr<TensorLayout> _B_tensor_layout;
     std::shared_ptr<TensorLayout> _Bt_tensor_layout;
 
@@ -39,7 +42,7 @@ namespace dolfin {
     /// in order for the updated solutions to fulfill the real
     /// Dirichlet BCs.
     IsometryConstraint(const FunctionSpace& W,
-                       const VertexFunction<bool>& boundary_marker);
+                       std::shared_ptr<const VertexFunction<bool>> boundary_marker);
 
     /// Updates the constraint with the values from Y. See the doc.
     void update_with(const Function& Y);
