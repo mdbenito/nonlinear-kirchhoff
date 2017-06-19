@@ -201,7 +201,7 @@ void KirchhoffAssembler::assemble_cells(
                               coordinate_dofs.data(),
                               ufc_cell.orientation);
 
-    // dump_raw_matrix(ufc.A, 36, 36, 4, "Local tensor");
+    // dump_raw_matrix(ufc.A, 36, 36, 4, "Local tensor", false);
     
     // split ufc.A in three blocks A_ii
     const auto& data = ufc.A.data();

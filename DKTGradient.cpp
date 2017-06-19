@@ -157,7 +157,7 @@ DKTGradient::apply(const double* p22tensor, P3Tensor& dkttensor)
     dkt(dkttensor.data());
 
   // Eigen::Matrix<double, 12, 12, Eigen::RowMajor> tmp(p22);
-  // dolfin::dump_raw_matrix(tmp.data(), 12, 12);
+  // dolfin::dump_raw_matrix(tmp.data(), 12, 12, "DKT", false);
 
   dkt = _Mt * p22 * _M;
 }

@@ -108,7 +108,7 @@ dostuff(void)
 
   // Initial data: careful that it fulfils the BCs.
   auto y0 = project_dkt(std::make_shared<BoundaryData>(), W3);
-  
+  dump_full_tensor(*(y0->vector()), 4, "y0.txt");
   // The discretised isometry constraint includes the condition for
   // the nodes on the Dirichlet boundary to be zero. This ensures that
   // the updates don't change the values of the initial condition,
@@ -164,7 +164,7 @@ dostuff(void)
   // This requires that the nonzeros for the blocks be already set up
   BlockMatrixAdapter Mk(block_Mk); 
   Mk.read(0,0);  // Read in A, we read the rest in the loop
-  dump_full_tensor(Mk.get(), 2, "Mk");
+  dump_full_tensor(Mk.get(), 2, "Mk.txt");
   
   std::cout << "Assembling force vector... ";
   NonlinearKirchhoff::Form_force l(W3);
@@ -188,7 +188,6 @@ dostuff(void)
   block_dtY_L->set_block(1, ignored);
   
   BlockVectorAdapter dtY_L(block_dtY_L);
-  dump_full_tensor(dtY_L.get(), 2, "dtY_L");
   
   Function y(*y0);       // Deformation y_{k+1}, begin with initial condition
 
@@ -201,7 +200,6 @@ dostuff(void)
   block_Fk->set_block(1, zeroVec);
 
   BlockVectorAdapter Fk(block_Fk);
-  dump_full_tensor(Fk.get(), 2, "block_Fk");
 
   bool stop = false;
   int max_steps = 3;
@@ -221,6 +219,7 @@ dostuff(void)
     table("Compute RHS", "time") =
       table.get_value("Compute RHS", "time") + toc();
     std::cout << "Done.\n";
+    dump_full_tensor(Fk.get(), 2, "block_Fk.txt");
     
     std::cout << "Updating discrete isometry constraint... ";
     tic();
@@ -234,25 +233,19 @@ dostuff(void)
     std::cout << "Solving... ";
     tic();
     solver.solve(Mk.get(), dtY_L.get(), Fk.get());
-    dump_full_tensor(dtY_L.get(), 3, "dtY_L");
     dtY_L.write(0);  // Update block_dtY_L(0,0) back from dty_L
     table("Solution", "time") =
       table.get_value("Solution", "time") + toc();
     std::cout << "Done.\n";
+    dump_full_tensor(dtY_L.get(), 2, "dtY_L.txt");
 
     y.vector()->axpy(-tau, *dtY);  // y = y - tau*dty
+    dump_full_tensor(*(y.vector()), 3, "New solution yk", false);
   }
   
   // info(table);  // outputs "<Table of size 5 x 1>"
   std::cout << table.str(true) << std::endl;
 
-  // std::cout << std::endl;
-  // dump_full_tensor(A, 3);
-  // std::cout << std::endl;
-  // dump_full_tensor(b, 3);
-  // std::cout << std::endl;
-  // dump_full_tensor(*u.vector(), 2);
-  // std::cout << std::endl;
   // Save solution in VTK format
   File file("solution.pvd");
   file << y;

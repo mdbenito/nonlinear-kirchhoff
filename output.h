@@ -15,13 +15,14 @@ namespace dolfin {
   // HACK: I don't know how to use the common interface of
   // GenericTensor and I don't have the time to learn it
   void dump_full_tensor(const GenericMatrix& A, int precision=14,
-                        const std::string& msg="", std::ostream& out=std::cout);
+                        const std::string& name="", bool asfile=true);
   void dump_full_tensor(const GenericVector& A, int precision=14,
-                        const std::string& msg="", std::ostream& out=std::cout);
-  void dump_raw_matrix(const double* A, int m, int n,
-                       int precision=14, std::ostream& out=std::cout);
+                        const std::string& name="", bool asfile=true);
+  void dump_raw_matrix(const double* A, int m, int n, int precision=14,
+                       const std::string& name="", bool asfile=true);
   void dump_raw_matrix(const std::vector<double>& A, int m, int n,
-                       int precision=14, std::ostream& out=std::cout);
+                       int precision=14,
+                       const std::string& name="", bool asfile=true);
 #endif
 }
 
