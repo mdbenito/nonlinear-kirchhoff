@@ -11,7 +11,10 @@ namespace dolfin {
   template <class T> class VertexFunction;
   class Function;
   class TensorLayout;
-  
+
+  /// IsometryConstraint implements the discrete isometry constraint
+  /// and Dirichlet boundary conditions for the gradient flow. See the
+  /// paper for more info.
   class IsometryConstraint
   {
     std::vector<int> _v2d;
@@ -26,11 +29,29 @@ namespace dolfin {
     std::shared_ptr<TensorLayout> _Bt_tensor_layout;
 
   public:
+    /// Constructor
+    ///
+    /// Initialises the sparsity pattern for the constraint
+    /// matrix. The VertexFunction boundary_marker tags all vertices
+    /// at the Dirichlet boundary. Recall that the constraint matrix
+    /// must encode the condition that the solutions to the system
+    /// (the gradient updates) have homogenous Dirichlet conditions,
+    /// in order for the updated solutions to fulfill the real
+    /// Dirichlet BCs.
     IsometryConstraint(const FunctionSpace& W,
                        const VertexFunction<bool>& boundary_marker);
-    
+
+    /// Updates the constraint with the values from Y. See the doc.
     void update_with(const Function& Y);
+    
+    /// Return the constraint matrix. Use this to build the system
+    /// matrix. Note that BlockMatrix requires pointers to non-const
+    /// Matrix so we cannot const it here
     std::shared_ptr<Matrix> get() { return _B; }
+
+    /// Return the transposed constraint matrix. Use this to build the
+    /// system matrix. Note that BlockMatrix requires pointers to
+    /// non-const Matrix so we cannot const it here
     std::shared_ptr<Matrix> get_transposed() { return _Bt; }
   };
 }

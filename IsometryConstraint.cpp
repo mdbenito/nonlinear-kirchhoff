@@ -31,14 +31,14 @@ namespace dolfin {
     // const auto& v2d = W.dofmap()->dofs(mesh, 0);
 
     {
-      _B_tensor_layout = _B->factory().create_layout(2);  // 2 is the rank
-      dolfin_assert(_B_tensor_layout);  // what for?
+      _B_tensor_layout = _B->factory().create_layout(2);  // rank 2 tensor
+      dolfin_assert(_B_tensor_layout);  // when can that fail?
 
       // FIXME: is this ok? every process should own a 4xN block
+      std::cout << "\t\tCHECK ME: IndexMap should init all global indices as local.\n";
       auto row_index_map = std::make_shared<IndexMap>(mesh.mpi_comm(), 4, 1);
       row_index_map->set_local_to_global(std::vector<std::size_t>());  // OK?
 
-    
       std::vector<std::shared_ptr<const IndexMap>> index_maps
         { row_index_map, W.dofmap()->index_map() };
 
@@ -55,9 +55,13 @@ namespace dolfin {
       std::size_t dofs[3];  // in order: point eval, dx, dy
       for (VertexIterator v(mesh); !v.end(); ++v)
       {
+        // Enforce homogeneous Dirichlet BCs by omitting dofs at
+        // Dirichlet nodes
         if (boundary_marker[*v])
           continue;
-        for (int sub = 0; sub < 3; ++sub)  // iterate over the 3 subspaces
+
+        // iterate over the 3 subspaces
+        for (int sub = 0; sub < 3; ++sub)
         {
           // dofs[0] = _v2d[9*v->index() + 3*sub];
           dofs[1] = _v2d[9*v->index() + 3*sub + 1];
@@ -73,8 +77,7 @@ namespace dolfin {
       }
       pattern->apply();
       _B->init(*_B_tensor_layout);
-      // _B->apply("insert");
-      std::cout << "Initialised B with size " << _B->size(0) << " x " << _B->size(1) << "\n";
+      // std::cout << "Initialised B with size " << _B->size(0) << " x " << _B->size(1) << "\n";
       // std::cout << "Pattern:\n" << pattern->str(true) << "\n";
     }
 
@@ -121,7 +124,7 @@ namespace dolfin {
       }
       pattern->apply();
       _Bt->init(*_Bt_tensor_layout);
-      std::cout << "Initialised Bt with size " << _Bt->size(0) << " x " << _Bt->size(1) << "\n";
+      // std::cout << "Initialised Bt with size " << _Bt->size(0) << " x " << _Bt->size(1) << "\n";
       // std::cout << "Pattern:\n" << pattern->str(true) << "\n";      
     }
   }
