@@ -36,7 +36,7 @@ namespace dolfin {
 
       // FIXME: is this ok? every process should own a 4xN block
       auto row_index_map = std::make_shared<IndexMap>(mesh.mpi_comm(), 4, 1);
-      // row_index_map->set_local_to_global(vector of global indices beyond local range);
+      row_index_map->set_local_to_global(std::vector<std::size_t>());  // OK?
 
     
       std::vector<std::shared_ptr<const IndexMap>> index_maps
