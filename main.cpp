@@ -30,7 +30,7 @@ class LeftBoundary : public SubDomain
 {
   bool inside(const Array<double>& x, bool on_boundary) const
   {
-    return on_boundary && near(x[0], 0);
+    return near(x[0], 0);
   }
 };
 
@@ -38,7 +38,7 @@ class RightBoundary : public SubDomain
 {
   bool inside(const Array<double>& x, bool on_boundary) const
   {
-    return on_boundary && near(x[0], M_PI);
+    return near(x[0], 1);
   }
 };
 
