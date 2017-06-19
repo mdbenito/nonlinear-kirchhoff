@@ -10,8 +10,12 @@ namespace dolfin{
   class GenericTensor;
 }
 
-/// Computes the transformation matrix for $\nabla_h$ over one cell.    
-/// This assumes that the dofs of the "source" cell (in DKT) are ordered as
+/// Computes the transformation matrix for $\nabla_h$ over one cell.
+///
+/// WARNING: This only works for SCALAR function spaces!
+///
+/// This assumes that the dofs of the "source" cell (in DKT) are
+/// ordered as
 /// 
 ///      w1, w1_x, w1_y, w2, w2_x, w2_y, w3, w3_x, w3_y,
 ///      
@@ -25,18 +29,25 @@ namespace dolfin{
 /// the opposite sides.
 class DKTGradient
 {
+  M_t   _M;  // gradient matrix
+  Mt_t _Mt;  // transposed gradient matrix
+  // int _dim;
+
 public:
   // Use RowMajor for compatibility with python / fenics. Is this ok?
   typedef Eigen::Matrix<double, 12, 9, Eigen::RowMajor> M_t;
   typedef Eigen::Matrix<double, 9, 12, Eigen::RowMajor> Mt_t;
-  M_t   M;  // gradient matrix
-  Mt_t Mt;  // transposed gradient matrix
-  
   typedef std::array<double, 9*9> P3Tensor;
+  typedef std::array<double, 12*12> P22Tensor;
   typedef std::array<double, 12> P22Vector;
-  
+
+
   /// Initialise the local cell gradient matrix.
-  /// (interpolates from P_2^2 into DKT)
+  /// (interpolates a scalar function from P_2^2 into DKT)
+  ///
+  /// TODO: set _dim to the number of subspaces this will operate on
+  /// (i.e. 1 for a FunctionSpace or the dimension of the
+  /// VectorFunctionSpace if using one.)
   DKTGradient();
 
   /// Updates the operator matrix for the given Cell

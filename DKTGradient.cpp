@@ -7,6 +7,8 @@
 
 DKTGradient::DKTGradient()
 {
+
+  std::cout << "DKTGradient: WARNING: assuming vector valued space of dim 3\n";
   /* TODO: I can only fix the ones if they are correctly placed, 
    i.e. after removing the permutation_hack() and inserting the values
    of M in the right places...
@@ -50,10 +52,10 @@ DKTGradient::update(const std::vector<double>& cc)
   assert(cc.size() == 6);
   // FIXME: do this in the constructor once permutation_hack is removed:
   // Fill identity submatrices
-  M.setZero();
-  M(0,1) = 1; M(1,2) = 1;
-  M(2,4) = 1; M(3,5) = 1;
-  M(4,7) = 1; M(5,8) = 1;
+  _M.setZero();
+  _M(0,1) = 1; _M(1,2) = 1;
+  _M(2,4) = 1; _M(3,5) = 1;
+  _M(4,7) = 1; _M(5,8) = 1;
 
   // FIXME: use Eigen for these too
   std::array<double, 3*2> tt;     // tangent vectors
@@ -90,16 +92,16 @@ DKTGradient::update(const std::vector<double>& cc)
 
   // Copy onto the gradient (sub) matrix (this is actually wasteful..)
   auto copytt = [&](size_t i, size_t r, size_t c) {
-    M.coeffRef(r,c)   = tt[IJ(i,0)];
-    M.coeffRef(r+1,c) = tt[IJ(i,1)];
+    _M.coeffRef(r,c)   = tt[IJ(i,0)];
+    _M.coeffRef(r+1,c) = tt[IJ(i,1)];
   };
   auto copy_tt = [&](size_t i, size_t r, size_t c) {
-    M.coeffRef(r,c)   = -tt[IJ(i,0)];
-    M.coeffRef(r+1,c) = -tt[IJ(i,1)];
+    _M.coeffRef(r,c)   = -tt[IJ(i,0)];
+    _M.coeffRef(r+1,c) = -tt[IJ(i,1)];
   };
   auto copyTT = [&](size_t i, size_t r, size_t c) {
-    M.coeffRef(r,c)   = TT[IIJ(i,0,0)]; M.coeffRef(r,c+1)   = TT[IIJ(i,0,1)];
-    M.coeffRef(r+1,c) = TT[IIJ(i,1,0)]; M.coeffRef(r+1,c+1) = TT[IIJ(i,1,1)];
+    _M.coeffRef(r,c)   = TT[IIJ(i,0,0)]; _M.coeffRef(r,c+1)   = TT[IIJ(i,0,1)];
+    _M.coeffRef(r+1,c) = TT[IIJ(i,1,0)]; _M.coeffRef(r+1,c+1) = TT[IIJ(i,1,1)];
   };
 
   copytt(0, 6, 3);
@@ -117,9 +119,9 @@ DKTGradient::update(const std::vector<double>& cc)
   copy_tt(2, 10, 3);
   copyTT(2, 10, 4);
 
-  permutation_hack(M);
+  permutation_hack(_M);
 
-  Mt = M.transpose();
+  _Mt = _M.transpose();
 }
 
 /// Compute $ M v $ for $ v \in P_3^{red} $
@@ -130,7 +132,7 @@ DKTGradient::apply_vec(const std::vector<double>& p3coeffs,
 {
   Eigen::Map<const Eigen::Matrix<double, 9, 1>> arg(p3coeffs.data());
   Eigen::Map<Eigen::Matrix<double, 12, 1>> dest(p22coeffs.data());
-  dest = M * arg;
+  dest = _M * arg;
 }
 
 /// Compute D = M^T A M.
@@ -140,13 +142,12 @@ DKTGradient::apply_vec(const std::vector<double>& p3coeffs,
 ///    
 ///   D is stored in dkttensor
 void
-DKTGradient::apply(double* p22tensor,
-                   P3Tensor& dkttensor)
+DKTGradient::apply(double* p22tensor, P3Tensor& dkttensor)
 {
   Eigen::Map<const Eigen::Matrix<double, 12, 12, Eigen::RowMajor>,
              0, Eigen::OuterStride<24>> p22(p22tensor,
                                             Eigen::OuterStride<24>());
   Eigen::Map<Eigen::Matrix<double, 9, 9, Eigen::RowMajor>>
     dkt(dkttensor.data());
-  dkt = Mt * p22 * M;
+  dkt = _Mt * p22 * _M;
 }
