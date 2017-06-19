@@ -208,7 +208,7 @@ void KirchhoffAssembler::assemble_cells(
       // HACK! We use an Eigen::OuterStride<24> in DKTGradient.apply()
       // to map chunks of the local tensor data into 12x12 matrices to
       // multiply by.
-      grad.apply(data + j*12*12*range_dim, D);
+      grad.apply(data + j*12*12*range_dim + j*12, D);
 
       // std::cout << "done.\n";
       // std::cout << "Adding dofs to global tensor... ";
