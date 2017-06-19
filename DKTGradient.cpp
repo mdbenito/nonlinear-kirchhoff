@@ -151,7 +151,7 @@ DKTGradient::apply(const double* p22tensor, P3Tensor& dkttensor)
 {
   Eigen::Map<const Eigen::Matrix<double, 12, 12, Eigen::RowMajor>,
              0, Eigen::OuterStride<>> p22(p22tensor,
-                                          Eigen::OuterStride<>((_dim-1)*12));
+                                          Eigen::OuterStride<>(_dim*12));
   Eigen::Map<Eigen::Matrix<double, 9, 9, Eigen::RowMajor>>
     dkt(dkttensor.data());
   dkt = _Mt * p22 * _M;
