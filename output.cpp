@@ -29,10 +29,8 @@ namespace dolfin {
 
     out << std::setprecision(precision);
     for (int i = 0; i < num_rows; i++) {
-      out << "[";
-      for (int j = 0; j < num_cols-1; j++) {
+      for (int j = 0; j < num_cols-1; j++)
         out << block[i*num_cols + j] << " ";
-      }
       // Don't print a trailing space, it confuses numpy.loadtxt()
       out << block[(i+1)*num_cols - 1] << std::endl;
     }
@@ -57,20 +55,22 @@ namespace dolfin {
     out << block[num_entries - 1] << std::endl;
   }
 
+  void dump_raw_matrix(const double* A, int m, int n,
+                       int precision, std::ostream& out)
+  {
+    out << std::setprecision(precision);
+    for (int i = 0; i < m; ++i) {
+      for (int j = 0; j < n-1; ++j)
+        out << A[n*i + j] << " ";
+      out << A[n*i + n] << std::endl;
+    }
+  }
+
   void
   dump_raw_matrix(const std::vector<double>& A, int m, int n,
                   int precision, std::ostream& out)
   {
-    out << std::setprecision(precision);
-    out << "[";
-    for (int i = 0; i < m; ++i) {
-      out << "[";
-      for (int j = 0; j < n-1; ++j)
-        out << A[n*i + j] << ", ";
-    
-      out << A[n*i + n] << "],\n";
-    }
-    out << "]\n";
+    dump_raw_matrix(A.data(), m, n, precision, out);
   }
 }
 #endif  // ifndef DISABLE_DUMP

@@ -4,6 +4,7 @@
 
 #include <dolfin.h>
 #include "DKTGradient.h"
+#include "output.h"
 
 DKTGradient::DKTGradient(int dim)
   : _dim(dim)
@@ -34,7 +35,7 @@ DKTGradient::update(const dolfin::Cell& cell)
 }
 
 /// HACK: this permutation is applied to M during update()
-// to adapt for the actual local dofmap.
+// to adapt for the actual ordering of dofs local to a cell.
 void
 permutation_hack(DKTGradient::M_t& M)
 {
@@ -154,5 +155,9 @@ DKTGradient::apply(const double* p22tensor, P3Tensor& dkttensor)
                                           Eigen::OuterStride<>(_dim*12));
   Eigen::Map<Eigen::Matrix<double, 9, 9, Eigen::RowMajor>>
     dkt(dkttensor.data());
+
+  // Eigen::Matrix<double, 12, 12, Eigen::RowMajor> tmp(p22);
+  // dolfin::dump_raw_matrix(tmp.data(), 12, 12);
+
   dkt = _Mt * p22 * _M;
 }
