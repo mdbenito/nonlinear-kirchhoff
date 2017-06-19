@@ -138,8 +138,6 @@ namespace dolfin {
     const auto& Y = *(y.vector());
     // assert(Y.local_range() == _B.local_range());   // WTF??
     
-    dump_full_tensor(Y, 3, "Updating constraint with Y = ");
-    
     for (VertexIterator v(mesh); !v.end(); ++v)
     {
       // std::cout << "\nVertex " << v->index() ":\n\n";
@@ -155,7 +153,7 @@ namespace dolfin {
         /* values[0] = 0.0; */    values[1]  = 2*Y[dofs[1]]; /*  values[2] =          0.0; */
         /* values[3] = 0.0; */    values[4]  =   Y[dofs[2]];     values[5] =   Y[dofs[1]];
         /* values[6] = 0.0; */    values[7]  =   Y[dofs[2]];     values[8] =   Y[dofs[1]];
-        /* values[9] = 0.0; */ /* values[10] =          0.0; */  values[11] = 2*Y[dofs[2]];
+        /* values[9] = 0.0; */ /* values[10] =          0.0; */ values[11] = 2*Y[dofs[2]];
 
         // std::cout << "Updating row " << rows[0] << " with " << values[1]
         //           << " at dof " << dofs[1] << " for vertex " << v->index() << "\n";
