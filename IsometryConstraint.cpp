@@ -82,16 +82,15 @@ namespace dolfin {
     }
 
     // This is me being lazy and sloppy...
-    
+    // FIXME: iterate only once, you lazy ass!
     {
       _Bt_tensor_layout = _Bt->factory().create_layout(2);  // 2 is the rank
       dolfin_assert(_Bt_tensor_layout);  // what for?
 
-      // FIXME: is this ok? every process should own a Nx4 block
-      auto col_index_map = std::make_shared<IndexMap>(mesh.mpi_comm(), 4, 1);
-      // col_index_map->set_local_to_global(vector of global indices beyond local range);
+      // FIXME: is this ok? every process should own a Nx7 block
+      auto col_index_map = std::make_shared<IndexMap>(mesh.mpi_comm(), 7, 1);
+      col_index_map->set_local_to_global(std::vector<std::size_t>());  // OK?
 
-    
       std::vector<std::shared_ptr<const IndexMap>> index_maps
       { W.dofmap()->index_map(), col_index_map };
 
