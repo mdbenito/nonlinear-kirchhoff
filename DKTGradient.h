@@ -29,10 +29,6 @@ namespace dolfin{
 /// the opposite sides.
 class DKTGradient
 {
-  M_t   _M;  // gradient matrix
-  Mt_t _Mt;  // transposed gradient matrix
-  // int _dim;
-
 public:
   // Use RowMajor for compatibility with python / fenics. Is this ok?
   typedef Eigen::Matrix<double, 12, 9, Eigen::RowMajor> M_t;
@@ -45,10 +41,10 @@ public:
   /// Initialise the local cell gradient matrix.
   /// (interpolates a scalar function from P_2^2 into DKT)
   ///
-  /// TODO: set _dim to the number of subspaces this will operate on
-  /// (i.e. 1 for a FunctionSpace or the dimension of the
-  /// VectorFunctionSpace if using one.)
-  DKTGradient();
+  /// dim is the number of subspaces this will operate on (only
+  /// partially supported with a hack for block diagonal matrices, see
+  /// apply())
+  DKTGradient(int dim=3);
 
   /// Updates the operator matrix for the given Cell
   void update(const dolfin::Cell& cell);
@@ -56,12 +52,20 @@ public:
   
   /// Compute $ M v $ for $ v \in P_3^{red} $
   /// Returns local coefficients in $ P_2^2 $
-  void apply_vec(const std::vector<double>& p3coeffs, P22Vector& p22coeffs);
+  /// Only works if _dim == 1
+  void apply_vec(std::vector<double>& p3coeffs, P22Vector& p22coeffs);
   
   /// Compute D = M^T A M where
   ///  A is the local tensor for (\nabla u, \nabla v) in a $ P_2^2 $ element
   ///  D is the local tensor for (\nabla \nabla_h u, \nabla \nabla_h v)
-  void apply(double* p22tensor, P3Tensor& D);
+  /// Works for dim > 1 ASSUMING that p22tensor is just a 12x12 chunk of the
+  /// actual matrix (better for KirchhoffAssembler)
+  void apply(const double* p22tensor, P3Tensor& D);
+  
+protected:
+  M_t   _M;  // gradient matrix
+  Mt_t _Mt;  // transposed gradient matrix
+  int _dim;  // range dimension
 };
 
 #endif // __DKTGRADIENT_HPP

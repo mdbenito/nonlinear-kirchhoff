@@ -5,10 +5,12 @@
 #include <dolfin.h>
 #include "DKTGradient.h"
 
-DKTGradient::DKTGradient()
+DKTGradient::DKTGradient(int dim)
+  : _dim(dim)
 {
-
-  std::cout << "DKTGradient: WARNING: assuming vector valued space of dim 3\n";
+  // Setting the OuterStride needs testing!
+  
+  std::cout << "DKTGradient: WARNING: using range dimension " << _dim << ".\n";
   /* TODO: I can only fix the ones if they are correctly placed, 
    i.e. after removing the permutation_hack() and inserting the values
    of M in the right places...
@@ -127,9 +129,12 @@ DKTGradient::update(const std::vector<double>& cc)
 /// Compute $ M v $ for $ v \in P_3^{red} $
 /// Returns local coefficients in $ P_2^2 $
 void
-DKTGradient::apply_vec(const std::vector<double>& p3coeffs,
+DKTGradient::apply_vec(std::vector<double>& p3coeffs,
                        std::array<double, 12>& p22coeffs)
 {
+  if(_dim != 1)
+    throw "DKTGradient::apply_vec() only implemented for scalar spaces.";
+
   Eigen::Map<const Eigen::Matrix<double, 9, 1>> arg(p3coeffs.data());
   Eigen::Map<Eigen::Matrix<double, 12, 1>> dest(p22coeffs.data());
   dest = _M * arg;
@@ -142,11 +147,11 @@ DKTGradient::apply_vec(const std::vector<double>& p3coeffs,
 ///    
 ///   D is stored in dkttensor
 void
-DKTGradient::apply(double* p22tensor, P3Tensor& dkttensor)
+DKTGradient::apply(const double* p22tensor, P3Tensor& dkttensor)
 {
   Eigen::Map<const Eigen::Matrix<double, 12, 12, Eigen::RowMajor>,
-             0, Eigen::OuterStride<24>> p22(p22tensor,
-                                            Eigen::OuterStride<24>());
+             0, Eigen::OuterStride<>> p22(p22tensor,
+                                          Eigen::OuterStride<>((_dim-1)*12));
   Eigen::Map<Eigen::Matrix<double, 9, 9, Eigen::RowMajor>>
     dkt(dkttensor.data());
   dkt = _Mt * p22 * _M;
