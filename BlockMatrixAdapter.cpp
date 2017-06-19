@@ -92,7 +92,7 @@ extract_nonzeros(const PETScMatrix& M, nz_data_t& nzentries,
 void
 BlockMatrixAdapter::assemble()
 {
-  std::cout << "Assembling flat matrix:\n";
+  // std::cout << "Assembling flat matrix:\n";
   auto nrows = _AA->size(0);
   auto ncols = _AA->size(1);
   
@@ -210,7 +210,7 @@ BlockMatrixAdapter::assemble()
   ierr = MatAssemblyEnd(mat, MAT_FLUSH_ASSEMBLY);
   TEST_PETSC_ERROR(ierr,"MatAssemblyEnd");
 
-  std::cout << " aaaand wrapping to go!\n";
+  std::cout << " done.\n";
 
   // FIXME: I should ensure that there are no references left around
   _A = std::make_shared<PETScMatrix>(mat);

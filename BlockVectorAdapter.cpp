@@ -17,10 +17,6 @@ using namespace dolfin;
 /// scratch. This is useful only when the size of the blocks
 /// changes. To update values in the aggregated vector use
 /// update_block() or update()
-/// NOTE:
-/// "Some algorithms require diagonal entries, so it's sometimes
-/// better to preallocate them and put an explicit zero (...) than to
-/// skip them"
 void
 BlockVectorAdapter::assemble()
 {

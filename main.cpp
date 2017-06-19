@@ -120,6 +120,7 @@ dostuff(void)
   right->mark(dirichlet_boundary, true);
   IsometryConstraint B(*W3, dirichlet_boundary);
   B.update_with(*y0);
+  dump_full_tensor(*B.get(), 12, "B0.txt");
 
   // Upper left block in the full matrix (constant)
   auto A = std::make_shared<Matrix>();
@@ -164,7 +165,7 @@ dostuff(void)
   // This requires that the nonzeros for the blocks be already set up
   BlockMatrixAdapter Mk(block_Mk); 
   Mk.read(0,0);  // Read in A, we read the rest in the loop
-  dump_full_tensor(Mk.get(), 2, "Mk.txt");
+  dump_full_tensor(Mk.get(), 12, "Mk.txt");
   
   std::cout << "Assembling force vector... ";
   NonlinearKirchhoff::Form_force l(W3);
@@ -219,7 +220,7 @@ dostuff(void)
     table("Compute RHS", "time") =
       table.get_value("Compute RHS", "time") + toc();
     std::cout << "Done.\n";
-    dump_full_tensor(Fk.get(), 2, "block_Fk.txt");
+    dump_full_tensor(Fk.get(), 12, "block_Fk.txt");
     
     std::cout << "Updating discrete isometry constraint... ";
     tic();
@@ -237,10 +238,10 @@ dostuff(void)
     table("Solution", "time") =
       table.get_value("Solution", "time") + toc();
     std::cout << "Done.\n";
-    dump_full_tensor(dtY_L.get(), 2, "dtY_L.txt");
+    dump_full_tensor(dtY_L.get(), 12, "dtY_L.txt");
 
     y.vector()->axpy(-tau, *dtY);  // y = y - tau*dty
-    dump_full_tensor(*(y.vector()), 3, "New solution yk", false);
+    dump_full_tensor(*(y.vector()), 12, "yk.txt");
   }
   
   // info(table);  // outputs "<Table of size 5 x 1>"
