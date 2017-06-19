@@ -108,7 +108,13 @@ namespace dolfin {
       std::size_t dofs[3];
       for (VertexIterator v(mesh); !v.end(); ++v)
       {
-        for (int sub = 0; sub < 3; ++sub)   // iterate over the 3 subspaces
+        // Enforce homogeneous Dirichlet BCs by omitting dofs at
+        // Dirichlet nodes
+        if (boundary_marker[*v])
+          continue;
+
+        // iterate over the 3 subspaces
+        for (int sub = 0; sub < 3; ++sub)
         {
           // dofs[0] = _v2d[9*v->index() + 3*sub];
           dofs[1] = _v2d[9*v->index() + 3*sub + 1];
