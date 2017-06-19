@@ -133,13 +133,20 @@ DKTGradient::apply_vec(const std::vector<double>& p3coeffs,
   dest = M * arg;
 }
 
-/// Compute M^T A M
-/// A will be the local tensor for (grad u, grad v) in a $ P_2^2 $ element
+/// Compute D = M^T A M.
+///
+///   A is given by p22tensor and should hold 12*12 entries from the
+///   local tensor for (grad u, grad v) in a $ P_2^2 $ element
+///    
+///   D is stored in dkttensor
 void
-DKTGradient::apply(const std::vector<double>& p22tensor,
+DKTGradient::apply(double* p22tensor,
                    P3Tensor& dkttensor)
 {
-  Eigen::Map<const Eigen::Matrix<double, 12, 12, Eigen::RowMajor>> p22(p22tensor.data());
-  Eigen::Map<Eigen::Matrix<double, 9, 9, Eigen::RowMajor>> dkt(dkttensor.data());
+  Eigen::Map<const Eigen::Matrix<double, 12, 12, Eigen::RowMajor>,
+             0, Eigen::OuterStride<24>> p22(p22tensor,
+                                            Eigen::OuterStride<24>());
+  Eigen::Map<Eigen::Matrix<double, 9, 9, Eigen::RowMajor>>
+    dkt(dkttensor.data());
   dkt = Mt * p22 * M;
 }

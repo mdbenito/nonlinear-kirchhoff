@@ -12,7 +12,7 @@ namespace dolfin
 {
 
   // Forward declarations
-  class GenericTensor;
+  class GenericMatrix;
   class Form;
   class UFC;
   class Cell;
@@ -33,25 +33,25 @@ namespace dolfin
     /// Assemble tensor from given form
     ///
     /// *Arguments*
-    ///     A (_GenericTensor_)
+    ///     A (_GenericMatrix_)
     ///         The tensor to assemble.
     ///     a (_Form_)
     ///         The P_3^{red} form to assemble the tensor from
     ///     p22form (_Form_)
     ///         The (\nabla u, \nabla v) P_2^2 form to assemble the
     ///         tensor from.
-    void assemble(GenericTensor& A, const Form& a, const Form& p22form);
+    void assemble(GenericMatrix& A, const Form& a, const Form& p22form);
 
-    void assemble_cells(GenericTensor& A, const Form& a, UFC& ufc,
+    void assemble_cells(GenericMatrix& A, const Form& a, UFC& ufc,
                         std::shared_ptr<const MeshFunction<std::size_t>> domains,
                         std::vector<double>* values);
 
-    void assemble_exterior_facets(GenericTensor& A, const Form& a,
+    void assemble_exterior_facets(GenericMatrix& A, const Form& a,
                                   UFC& ufc,
                                   std::shared_ptr<const MeshFunction<std::size_t>> domains,
                                   std::vector<double>* values);
 
-    void assemble_interior_facets(GenericTensor& A, const Form& a,
+    void assemble_interior_facets(GenericMatrix& A, const Form& a,
                                   UFC& ufc,
                                   std::shared_ptr<const MeshFunction<std::size_t>> domains,
                                   std::shared_ptr<const MeshFunction<std::size_t>> cell_domains,
@@ -59,7 +59,7 @@ namespace dolfin
 
     /// Assemble tensor from given form over vertices. This function is
     /// provided for users who wish to build a customized assembler.
-    void assemble_vertices(GenericTensor& A, const Form& a, UFC& ufc,
+    void assemble_vertices(GenericMatrix& A, const Form& a, UFC& ufc,
                            std::shared_ptr<const MeshFunction<std::size_t>> domains);
 
   };

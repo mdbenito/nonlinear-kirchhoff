@@ -50,9 +50,7 @@ public:
   /// Compute D = M^T A M where
   ///  A is the local tensor for (\nabla u, \nabla v) in a $ P_2^2 $ element
   ///  D is the local tensor for (\nabla \nabla_h u, \nabla \nabla_h v)
-  void apply(const std::vector<double>& p22tensor, P3Tensor& D);
-
-  
+  void apply(double* p22tensor, P3Tensor& D);
 };
 
 #endif // __DKTGRADIENT_HPP

@@ -6,7 +6,7 @@
 #include <dolfin/common/Array.h>
 #include <dolfin/common/Timer.h>
 #include <dolfin/parameter/GlobalParameters.h>
-#include <dolfin/la/GenericTensor.h>
+#include <dolfin/la/GenericMatrix.h>
 #include <dolfin/mesh/Mesh.h>
 #include <dolfin/mesh/Cell.h>
 #include <dolfin/mesh/Facet.h>
@@ -23,8 +23,6 @@
 // #include <dolfin/fem/OpenMpAssembler.h>
 #include <dolfin/fem/AssemblerBase.h>
 
-#include <dolfin/la/GenericMatrix.h>
-
 #include "KirchhoffAssembler.h"
 
 using namespace dolfin;
@@ -32,7 +30,7 @@ using namespace dolfin;
 /* Remember that a is a Form in a FunctionSpace<DKT> and p2form is a
  * form in a VectorFunctionSpace<P2>  */
 void
-KirchhoffAssembler::assemble(GenericTensor& A,
+KirchhoffAssembler::assemble(GenericMatrix& A,
                              const Form& a,
                              const Form& p22form)
 {
@@ -88,8 +86,12 @@ KirchhoffAssembler::assemble(GenericTensor& A,
 }
 
 //-----------------------------------------------------------------------------
+
+/// WARNING! I'm using the fact that the local P22 tensor has block
+/// diagonal structure because there are no interactions among
+/// different components.
 void KirchhoffAssembler::assemble_cells(
-  GenericTensor& A,
+  GenericMatrix& A,
   const Form& a,         /* The P_3^red form*/
   UFC& ufc,
   std::shared_ptr<const MeshFunction<std::size_t>> domains,
@@ -102,22 +104,27 @@ void KirchhoffAssembler::assemble_cells(
   Timer timer("Assemble cells");
 
   dolfin_assert(a.mesh());
-
   const Mesh& mesh = *(a.mesh());
-  
-  auto form_rank = ufc.form.rank();
-  assert(form_rank == a.rank());  // MBD CHECK THIS
-  assert(form_rank == 2);
-  
 
+  // Superfluous if we are only accepting matrices
+  // auto form_rank = ufc.form.rank();
+  // assert(form_rank == a.rank());
+  // assert(form_rank == 2);
+  
+  int range_dim = 3;  // HACK
+  
   // Collect pointers to dof maps
-  // MBD We use the DKT form 'a' here, so this should be ok
-  std::vector<const GenericDofMap*> dofmaps;
-  for (auto i = 0; i < form_rank; ++i)
-    dofmaps.push_back(a.function_space(i)->dofmap().get());
-
-  // Vector to hold dof map for a cell
-  std::vector<ArrayView<const dolfin::la_index>> dofs(form_rank);
+  // MBD We use the DKT form 'a' here, so this is ok
+  std::vector<const GenericDofMap*> rowdofmaps;
+  std::vector<const GenericDofMap*> coldofmaps;
+  for (auto j = 0; j < range_dim; ++j)
+  {
+    rowdofmaps.push_back(a.function_space(0)->sub(j)->dofmap().get());
+    coldofmaps.push_back(a.function_space(1)->sub(j)->dofmap().get());
+  }
+  // Vectors to hold row dofmaps for a cell
+  std::vector<ArrayView<const dolfin::la_index>> rowdofs(range_dim);
+  std::vector<ArrayView<const dolfin::la_index>> coldofs(range_dim);
 
   // Cell integral for p22
   auto integral = ufc.default_cell_integral.get();
@@ -128,11 +135,18 @@ void KirchhoffAssembler::assemble_cells(
   // Assemble over cells
   ufc::cell ufc_cell;
   std::vector<double> coordinate_dofs;
-  DKTGradient::P3Tensor D;  // MBD stores Mt * A * M
   
+  // MBD: For each cell tensor T, D stores Mt * T_ii * M for
+  // i=1,2,3. Recall that T has diagonal block structure
+  DKTGradient::P3Tensor D;
+
   Progress p(AssemblerBase::progress_message(A.rank(), "cells"),
              mesh.num_cells());
 
+  // std::cout << "Form rank is " << form_rank << ".\n";
+  
+  // auto dm0 = a.function_space(0)->dofmap().get();
+  // auto dm1 = a.function_space(1)->dofmap().get();
   
   for (CellIterator cell(mesh); !cell.end(); ++cell)
   {
@@ -157,11 +171,24 @@ void KirchhoffAssembler::assemble_cells(
     // Get local-to-global dof maps for cell
     // MBD: we need to use the dofmaps for DKT
     bool empty_dofmap = false;
-    for (std::size_t i = 0; i < form_rank; ++i)
+    for(auto j = 0; j < range_dim; ++j)
     {
-      dofs[i] = dofmaps[i]->cell_dofs(cell->index());
-      empty_dofmap = empty_dofmap || dofs[i].size() == 0;
+      rowdofs[j] = rowdofmaps[j]->cell_dofs(cell->index());
+      coldofs[j] = coldofmaps[j]->cell_dofs(cell->index());
+      empty_dofmap = empty_dofmap || rowdofs[j].size() == 0 || coldofs[j].size() == 0;
+
+      // std::cout << "Subdofmap " << j << ": ";
+      // for (int i=0;i<9;++i)
+      //   std::cout << "(" << rowdofs[j][i] << ", " << coldofs[j][i] << ") ";
+      // std::cout << ".\n";
     }
+    // std::cout << "\nDofmap: ";
+    // ArrayView<const la_index> c0, c1;
+    // c0 = dm0->cell_dofs(cell->index());
+    // c1 = dm1->cell_dofs(cell->index());
+    // for (int i=0;i<27;++i)
+    //   std::cout << "(" << c0[i] << ", " << c1[i] << ") ";
+    // std::cout << ".\n";
 
     // Skip if at least one dofmap is empty
     // MBD: why would it?
@@ -172,17 +199,29 @@ void KirchhoffAssembler::assemble_cells(
     integral->tabulate_tensor(ufc.A.data(), ufc.w(),
                               coordinate_dofs.data(),
                               ufc_cell.orientation);
+    // split ufc.A in three blocks A_ii
+    const auto& data = ufc.A.data();
+    for(auto j = 0; j < range_dim; ++j)
+    {
+      // std::cout << "Applying DKT gradient to component " << j << "... ";
 
-    grad.apply(ufc.A, D);
-    // Should use dkt local->global dofs for insertion into global tensor
-    A.add_local(D.data(), dofs);
+      // HACK! We use an Eigen::OuterStride<24> in DKTGradient.apply()
+      // to map chunks of the local tensor data into 12x12 matrices to
+      // multiply by.
+      grad.apply(data + j*12*12*range_dim, D);
 
+      // std::cout << "done.\n";
+      // std::cout << "Adding dofs to global tensor... ";
+      //Use dkt local->global dofs for insertion into global tensor
+      A.add_local(D.data(), 9, rowdofs[j].data(), 9, coldofs[j].data());
+      // std::cout << "done.\n";
+    }
     p++;
   }
 }
 //-----------------------------------------------------------------------------
 void KirchhoffAssembler::assemble_exterior_facets(
-  GenericTensor& A,
+  GenericMatrix& A,
   const Form& a,
   UFC& ufc,
   std::shared_ptr<const MeshFunction<std::size_t>> domains,
@@ -283,7 +322,7 @@ void KirchhoffAssembler::assemble_exterior_facets(
 }
 //-----------------------------------------------------------------------------
 void KirchhoffAssembler::assemble_interior_facets(
-  GenericTensor& A,
+  GenericMatrix& A,
   const Form& a,
   UFC& ufc,
   std::shared_ptr<const MeshFunction<std::size_t>> domains,
@@ -432,7 +471,7 @@ void KirchhoffAssembler::assemble_interior_facets(
 }
 //-----------------------------------------------------------------------------
 void KirchhoffAssembler::assemble_vertices(
-  GenericTensor& A,
+  GenericMatrix& A,
   const Form& a,
   UFC& ufc,
   std::shared_ptr<const MeshFunction<std::size_t>> domains)
