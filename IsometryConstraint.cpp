@@ -138,7 +138,7 @@ namespace dolfin {
     const auto& Y = *(y.vector());
     // assert(Y.local_range() == _B.local_range());   // WTF??
     
-    dump_full_tensor(y, 3, "Updating constraint with Y = ");
+    dump_full_tensor(Y, 3, "Updating constraint with Y = ");
     
     for (VertexIterator v(mesh); !v.end(); ++v)
     {
