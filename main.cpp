@@ -104,11 +104,21 @@ dostuff(void)
   // and tau is the length of the sides, not the diagonal, i.e. hmin().
   double tau = mesh->hmin();
 
+  std::cout << "Running on a mesh with " << mesh->num_cells() << " cells.\n";
+  std::cout << "FE space has " << W3->dim() << " dofs.\n";
   std::cout << "Using alpha = " << alpha << ", tau = " << tau << ".\n";
 
+  Table table("Assembly and application of BCs");
+
+  std::cout << "Projecting initial data onto W^3... ";
+  tic();
   // Initial data: careful that it fulfils the BCs.
   auto y0 = project_dkt(std::make_shared<BoundaryData>(), W3);
+  table("Projection of y0", "time") = toc();
+  std::cout << "Done.\n";
   dump_full_tensor(*(y0->vector()), 4, "y0.txt");
+
+  
   // The discretised isometry constraint includes the condition for
   // the nodes on the Dirichlet boundary to be zero. This ensures that
   // the updates don't change the values of the initial condition,
@@ -118,9 +128,18 @@ dostuff(void)
   VertexFunction<bool> dirichlet_boundary(mesh, false);
   left->mark(dirichlet_boundary, true);
   right->mark(dirichlet_boundary, true);
+  
+  std::cout << "Initialising constraint... ";
   IsometryConstraint B(*W3, dirichlet_boundary);
+  std::cout << "Done.\n";
+
+  std::cout << "Populating constraint... ";
+  tic();
   B.update_with(*y0);
-  dump_full_tensor(*B.get(), 12, "B0.txt");
+  table("Constraint updates", "time") = toc();
+  std::cout << "Done.\n";
+
+  // dump_full_tensor(*B.get(), 12, "B0.txt");
 
   // Upper left block in the full matrix (constant)
   auto A = std::make_shared<Matrix>();
@@ -143,13 +162,11 @@ dostuff(void)
   block_Mk->set_block(0, 1, B.get_transposed());
   block_Mk->set_block(1, 1, zeroMat);
 
-  Table table("Assembly and application of BCs");
-  
   std::cout << "Projecting force onto W^3... ";
   tic();
   auto force = std::make_shared<Force>();
   auto f = std::shared_ptr<const Function>(std::move(project_dkt(force, W3)));
-  table("Projection", "time") = toc();
+  table("Projection of f", "time") = toc();
   std::cout << "Done.\n";
 
   std::cout << "Assembling bilinear form... ";
@@ -159,7 +176,7 @@ dostuff(void)
   assembler.assemble(*A, a, p22);
   auto Ao = A->copy();   // Store copy to use in the computation of the RHS,
   *A *= 1 + alpha*tau;   // because we transform A here
-  table("Form assembly", "time") = toc();
+  table("Assembly", "time") = toc();
   std::cout << "Done.\n";
 
   // This requires that the nonzeros for the blocks be already set up
@@ -173,7 +190,7 @@ dostuff(void)
   tic();
   l.f = f;
   rhs_assembler.assemble(L, l);
-  table("Force assembly", "time") = toc();
+  table("Assembly", "time") = toc();
   std::cout << "Done.\n";
 
 
@@ -203,10 +220,9 @@ dostuff(void)
   BlockVectorAdapter Fk(block_Fk);
 
   bool stop = false;
-  int max_steps = 3;
+  int max_steps = 2;
   int step = 0;
-  table("Compute RHS", "time") = 0;
-  table("Update constraint", "time") = 0;
+  table("RHS computation", "time") = 0;
   table("Solution", "time") = 0;
   while (! stop && ++step <= max_steps) {
     std::cout << "\n## Step " << step << " ##\n\n";
@@ -217,18 +233,18 @@ dostuff(void)
     *top_Fk -= L;
     *top_Fk *= -tau;
     Fk.read(0);
-    table("Compute RHS", "time") =
-      table.get_value("Compute RHS", "time") + toc();
+    table("RHS computation", "time") =
+      table.get_value("RHS computation", "time") + toc();
     std::cout << "Done.\n";
-    dump_full_tensor(Fk.get(), 12, "block_Fk.txt");
+    dump_full_tensor(Fk.get(), 12, "Fk.txt");
     
     std::cout << "Updating discrete isometry constraint... ";
     tic();
     B.update_with(y);
     Mk.read(0,1);  // This is *extremely* inefficient. At least I could
     Mk.read(1,0);  // update B in place inside Mk.
-    table("Update constraint", "time") =
-      table.get_value("Update constraint", "time") + toc();
+    table("Constraint updates", "time") =
+      table.get_value("Constraint updates", "time") + toc();
     std::cout << "Done.\n";
 
     std::cout << "Solving... ";
