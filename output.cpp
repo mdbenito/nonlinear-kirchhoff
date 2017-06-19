@@ -5,11 +5,12 @@
 
 
 #include "output.h"
-#ifndef __OUTPUT_H //DISABLE_DUMP
+#ifndef DISABLE_DUMP
 namespace dolfin {
 
   void
-  dump_full_tensor(const GenericMatrix& A, int precision, const std::string& msg)
+  dump_full_tensor(const GenericMatrix& A, int precision,
+                   const std::string& msg, std::ostream& out)
   {    
     auto num_rows = A.size(0);
     auto num_cols = A.size(1);
@@ -22,22 +23,24 @@ namespace dolfin {
     std::vector<double> block(num_rows*num_cols);
 
     if (msg.size() > 0)
-      std::cout << msg << ": ";
+      out << msg << ": ";
 
     A.get(block.data(), num_rows, rows.data(), num_cols, cols.data());
 
-    std::cout << std::setprecision(precision);
+    out << std::setprecision(precision);
     for (int i = 0; i < num_rows; i++) {
+      out << "[";
       for (int j = 0; j < num_cols-1; j++) {
-        std::cout << block[i*num_cols + j] << " ";
+        out << block[i*num_cols + j] << " ";
       }
       // Don't print a trailing space, it confuses numpy.loadtxt()
-      std::cout << block[(i+1)*num_cols - 1] << std::endl;
+      out << block[(i+1)*num_cols - 1] << std::endl;
     }
   }
 
   void
-  dump_full_tensor(const GenericVector& A, int precision, const std::string& msg)
+  dump_full_tensor(const GenericVector& A, int precision,
+                   const std::string& msg, std::ostream& out)
   {
     auto num_entries = A.size(0);
 
@@ -46,13 +49,28 @@ namespace dolfin {
     A.get_local(block);
 
     if (msg.size() > 0)
-      std::cout << msg << ": ";
+      out << msg << ": ";
 
-    std::cout << std::setprecision(precision);
+    out << std::setprecision(precision);
     for (int i = 0; i < num_entries-1; i++)
-      std::cout << block[i] << " ";
-    std::cout << block[num_entries - 1] << std::endl;
+      out << block[i] << " ";
+    out << block[num_entries - 1] << std::endl;
   }
 
+  void
+  dump_raw_matrix(const std::vector<double>& A, int m, int n,
+                  int precision, std::ostream& out)
+  {
+    out << std::setprecision(precision);
+    out << "[";
+    for (int i = 0; i < m; ++i) {
+      out << "[";
+      for (int j = 0; j < n-1; ++j)
+        out << A[n*i + j] << ", ";
+    
+      out << A[n*i + n] << "],\n";
+    }
+    out << "]\n";
+  }
 }
 #endif  // ifndef DISABLE_DUMP
