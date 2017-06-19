@@ -24,11 +24,13 @@
 #include <dolfin/fem/AssemblerBase.h>
 
 #include "KirchhoffAssembler.h"
+#include "output.h"
 
 using namespace dolfin;
 
 /* Remember that a is a Form in a FunctionSpace<DKT> and p2form is a
- * form in a VectorFunctionSpace<P2>  */
+ * form in a TensorFunctionSpace<P2> with shape (3,2)
+ */
 void
 KirchhoffAssembler::assemble(GenericMatrix& A,
                              const Form& a,
@@ -178,7 +180,7 @@ void KirchhoffAssembler::assemble_cells(
       empty_dofmap = empty_dofmap || rowdofs[j].size() == 0 || coldofs[j].size() == 0;
 
       // std::cout << "Subdofmap " << j << ": ";
-      // for (int i=0;i<9;++i)
+      // for (int i=0;i<rowdofs[j].size();++i)
       //   std::cout << "(" << rowdofs[j][i] << ", " << coldofs[j][i] << ") ";
       // std::cout << ".\n";
     }
@@ -186,12 +188,11 @@ void KirchhoffAssembler::assemble_cells(
     // ArrayView<const la_index> c0, c1;
     // c0 = dm0->cell_dofs(cell->index());
     // c1 = dm1->cell_dofs(cell->index());
-    // for (int i=0;i<27;++i)
+    // for (int i=0;i<c0.size();++i)
     //   std::cout << "(" << c0[i] << ", " << c1[i] << ") ";
     // std::cout << ".\n";
 
-    // Skip if at least one dofmap is empty
-    // MBD: why would it?
+    // Skip if at least one dofmap is empty MBD: why would it?
     if (empty_dofmap) 
       continue;
 
@@ -199,6 +200,9 @@ void KirchhoffAssembler::assemble_cells(
     integral->tabulate_tensor(ufc.A.data(), ufc.w(),
                               coordinate_dofs.data(),
                               ufc_cell.orientation);
+
+    // dump_raw_matrix(ufc.A, 36, 36, 4, "Local tensor");
+    
     // split ufc.A in three blocks A_ii
     const auto& data = ufc.A.data();
     for(auto j = 0; j < range_dim; ++j)
