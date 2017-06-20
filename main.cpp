@@ -3,6 +3,7 @@
 #include <numeric>
 #include <vector>
 #include <tuple>
+#include <cmath>
 #include <dolfin.h>
 
 #include "NonlinearKirchhoff.h"
@@ -80,29 +81,45 @@ project_dkt(std::shared_ptr<const GenericFunction> what,
 }
 
 
-/* 
- *
- */
+/// Rounds small (local) entries in a GenericVector to zero.  This
+/// makes only (limited) sense for y0, because the projection of the
+/// identity function from CG3 to DKT produces lots of noisy entries.
+void
+round_zeros(GenericVector& v, double precision=1e-6)
+{
+    auto range = v.local_range();
+    auto numrows = range.second - range.first;
+    std::vector<la_index> rows(numrows);
+    std::iota(rows.begin(), rows.end(), 0);
+    std::vector<double> block(numrows);
+    v.get_local(block.data(), numrows, rows.data());
+    
+    std::transform(block.begin(), block.end(), block.begin(),
+                   [] (double v) -> double {
+                     return (std::abs(v)< 1e-8) ? 0.0 : v;
+                   });
+    v.set_local(block.data(), numrows, rows.data());
+}
+
+
+
+/// Does the magic.
+///
+///   mesh: duh.
+///   alpha: Factor multiplying the bending energy term
+///   tau: time step size
+///
+/// TODO: allow an adaptive step size policy
 int
-dostuff(void)
+dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
+        int max_steps)
 {
   KirchhoffAssembler assembler;
   Assembler rhs_assembler;
   PETScLUSolver solver;
-  
-  auto mesh = std::make_shared<RectangleMesh>(MPI_COMM_WORLD,
-                                              Point (0.0, 0.0), Point (1.0, 1.0),
-                                              1, 1);//, "crossed");
+
   auto W3 = std::make_shared<NonlinearKirchhoff::Form_dkt_FunctionSpace_0>(mesh);
   auto T3 = std::make_shared<NonlinearKirchhoff::Form_p22_FunctionSpace_0>(mesh);
-
-  
-  // factor multiplying the bending energy term
-  double alpha = 1.0;
-  
-  // time step size. In the paper the triangulation consists of halved squares
-  // and tau is the length of the sides, not the diagonal, i.e. hmin().
-  double tau = mesh->hmin();
 
   std::cout << "Running on a mesh with " << mesh->num_cells() << " cells.\n";
   std::cout << "FE space has " << W3->dim() << " dofs.\n";
@@ -116,8 +133,12 @@ dostuff(void)
   auto y0 = project_dkt(std::make_shared<BoundaryData>(), W3);
   table("Projection of y0", "time") = toc();
   std::cout << "Done.\n";
-  dump_full_tensor(*(y0->vector()), 4, "y0.txt");
-
+  {
+    auto& v = *(y0->vector());
+    round_zeros(v);
+    dump_full_tensor(v, 4, "y0.txt");
+  }
+  
   
   // The discretised isometry constraint includes the condition for
   // the nodes on the Dirichlet boundary to be zero. This ensures that
@@ -220,7 +241,6 @@ dostuff(void)
   BlockVectorAdapter Fk(block_Fk);
 
   bool stop = false;
-  int max_steps = 2;
   int step = 0;
   table("RHS computation", "time") = 0;
   table("Solution", "time") = 0;
@@ -255,9 +275,12 @@ dostuff(void)
       table.get_value("Solution", "time") + toc();
     std::cout << "Done.\n";
     dump_full_tensor(dtY_L.get(), 12, "dtY_L.txt");
-
+    // dump_full_tensor(dtY_L.get(), 12, "Update", false);
+    
     y.vector()->axpy(-tau, *dtY);  // y = y - tau*dty
+    
     dump_full_tensor(*(y.vector()), 12, "yk.txt");
+    // dump_full_tensor(*(y.vector()), 12, "Solution", false);
   }
   
   // info(table);  // outputs "<Table of size 5 x 1>"
@@ -271,31 +294,39 @@ dostuff(void)
 }
 
 
-int
-main(void)
+void
+test_dofs(std::shared_ptr<RectangleMesh> mesh)
 {
-  // auto mesh = std::make_shared<RectangleMesh>(MPI_COMM_WORLD,
-  //                                             Point (0, -M_PI/2),
-  //                                             Point (M_PI, M_PI/2),
-  //                                             1, 1);//, "crossed");
-  // auto W3 = std::make_shared<NonlinearKirchhoff::Form_dkt_FunctionSpace_0>(mesh);
-  // auto T3 = std::make_shared<NonlinearKirchhoff::Form_p22_FunctionSpace_0>(mesh);
+  auto W3 = std::make_shared<NonlinearKirchhoff::Form_dkt_FunctionSpace_0>(mesh);
+  auto T3 = std::make_shared<NonlinearKirchhoff::Form_p22_FunctionSpace_0>(mesh);
 
-  // auto y0 = project_dkt(std::make_shared<Constant>(1.0, 2.0, 3.0), W3);
+  auto y0 = project_dkt(std::make_shared<Constant>(1.0, 2.0, 3.0), W3);
 
-  // dump_full_tensor(*(y0->vector()), 1);
+  dump_full_tensor(*(y0->vector()), 2, "y0", false);
 
-  // for (CellIterator cell(*mesh); !cell.end(); ++cell)
-  // {
-  //   auto dofs = W3->dofmap()->cell_dofs(cell->index());
-  //   std::cout << "Cell: " << cell->index() << ", DOFs: ";
-  //   for (int i = 0; i < dofs.size()-1; ++i)
-  //     std::cout << dofs[i] << ", ";
-  //   std::cout << dofs[dofs.size()-1] << std::endl;
-  // }
+  for (CellIterator cell(*mesh); !cell.end(); ++cell)
+  {
+    auto dofs = W3->dofmap()->cell_dofs(cell->index());
+    std::cout << "Cell: " << cell->index() << ", DOFs: ";
+    for (int i = 0; i < dofs.size()-1; ++i)
+      std::cout << dofs[i] << ", ";
+    std::cout << dofs[dofs.size()-1] << std::endl;
+  }
   
-  // File file("y0.pvd");
-  // file << *y0;
+}
 
-  return dostuff();
+int
+main(int argc, char** argv)
+{
+  auto mesh = std::make_shared<RectangleMesh>(MPI_COMM_WORLD,
+                                              Point (0.0, 0.0), Point (1.0, 1.0),
+                                              6, 6, "crossed");
+  double alpha = 1.0;
+  // In the paper the triangulation consists of halved squares
+  // and tau is the length of the sides i.e. hmin() in our case.
+  double tau = mesh->hmin() / 1e10;
+
+  int max_steps = 20;
+
+  return dostuff(mesh, alpha, tau, max_steps);
 }
