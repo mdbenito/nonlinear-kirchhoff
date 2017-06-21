@@ -146,7 +146,8 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
   // which should fulfill the BC
   auto  left = std::make_shared<LeftBoundary>();  
   auto right = std::make_shared<RightBoundary>();
-  auto dirichlet_boundary = std::make_shared<VertexFunction<bool>>(mesh, false);
+  auto dirichlet_boundary =
+    std::make_shared<VertexFunction<bool>>(mesh, false);
   left->mark(*dirichlet_boundary, true);
   right->mark(*dirichlet_boundary, true);
   
@@ -160,7 +161,7 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
   table("Constraint updates", "time") = toc();
   std::cout << "Done.\n";
 
-  // dump_full_tensor(*B.get(), 12, "B0.txt");
+  dump_full_tensor(*B.get(), 12, "B0.txt");
 
   // Upper left block in the full matrix (constant)
   auto A = std::make_shared<Matrix>();
@@ -180,7 +181,8 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
   std::cout << "Projecting force onto W^3... ";
   tic();
   auto force = std::make_shared<Force>();
-  auto f = std::shared_ptr<const Function>(std::move(project_dkt(force, W3)));
+  auto f = std::shared_ptr<const Function>(std::move(project_dkt(force,
+                                                                 W3)));
   table("Projection of f", "time") = toc();
   std::cout << "Done.\n";
 
@@ -189,15 +191,15 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
   NonlinearKirchhoff::Form_p22 p22(T3, T3);
   tic();
   assembler.assemble(*A, a, p22);
-  auto Ao = A->copy();   // Store copy to use in the computation of the RHS,
+  auto Ao = A->copy();   // Store copy to compute the RHS later,
   *A *= 1 + alpha*tau;   // because we transform A here
   table("Assembly", "time") = toc();
+  dump_full_tensor(*A, 12, "A.txt");
   std::cout << "Done.\n";
 
   // This requires that the nonzeros for the blocks be already set up
   BlockMatrixAdapter Mk(block_Mk); 
   Mk.read(0,0);  // Read in A, we read the rest in the loop
-  dump_full_tensor(Mk.get(), 12, "Mk.txt");
   
   std::cout << "Assembling force vector... ";
   NonlinearKirchhoff::Form_force l(W3);
@@ -222,13 +224,14 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
   
   BlockVectorAdapter dtY_L(block_dtY_L);
   
-  Function y(*y0);       // Deformation y_{k+1}, begin with initial condition
+  Function y(*y0);  // Deformation y_{k+1}, begin with initial condition
 
   // Setup right hand side at step k. The content of the first block
   // is set in the loop, the second is always zero
   auto block_Fk = std::make_shared<BlockVector>(2);
   auto top_Fk = std::make_shared<Vector>();
-  A->init_vector(*top_Fk, 0);  // second arg is dim, meaning *top_Fk = Ax for some x
+  // second arg is dim, meaning *top_Fk = Ax for some x
+  A->init_vector(*top_Fk, 0);
   block_Fk->set_block(0, top_Fk);
   block_Fk->set_block(1, zeroVec);
 
@@ -255,8 +258,8 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
     std::cout << "Updating discrete isometry constraint... ";
     tic();
     B.update_with(y);
-    Mk.read(0,1);  // This is *extremely* inefficient. At least I could
-    Mk.read(1,0);  // update B in place inside Mk.
+    Mk.read(0,1);  // This is *extremely* inefficient. At least I
+    Mk.read(1,0);  // could update B in place inside Mk.
     table("Constraint updates", "time") =
       table.get_value("Constraint updates", "time") + toc();
     std::cout << "Done.\n";
@@ -277,6 +280,8 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
     // dump_full_tensor(*(y.vector()), 12, "Solution", false);
   }
   
+  dump_full_tensor(Mk.get(), 12, "Mk.txt");
+  
   // info(table);  // outputs "<Table of size 5 x 1>"
   std::cout << table.str(true) << std::endl;
 
@@ -291,10 +296,13 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
 void
 test_dofs(std::shared_ptr<RectangleMesh> mesh)
 {
-  auto W3 = std::make_shared<NonlinearKirchhoff::Form_dkt_FunctionSpace_0>(mesh);
-  auto T3 = std::make_shared<NonlinearKirchhoff::Form_p22_FunctionSpace_0>(mesh);
+  auto W3 = std::make_shared<NonlinearKirchhoff::
+                             Form_dkt_FunctionSpace_0>(mesh);
+  auto T3 = std::make_shared<NonlinearKirchhoff::
+                             Form_p22_FunctionSpace_0>(mesh);
 
-  auto y0 = project_dkt(std::make_shared<Constant>(1.0, 2.0, 3.0), W3);
+  auto y0 = project_dkt(std::make_shared<Constant>(1.0, 2.0, 3.0),
+                        W3);
 
   dump_full_tensor(*(y0->vector()), 2, "y0", false);
 

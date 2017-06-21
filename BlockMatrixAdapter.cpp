@@ -19,14 +19,15 @@ using namespace dolfin;
 // global index of non zero row -> vec of global indices of non zero cols:
 typedef std::map<PetscInt, std::vector<PetscInt>> nz_data_t;
 
-/// UNTESTED: Extracts sparsity pattern from a PETScMatrix.
+/// Extracts sparsity pattern from a PETScMatrix.
 /// out param: nzentries (std::map...)
 /// Returns total number of non zeros in M
 ///
 /// IMPORTANT! We assume that we are called "from left to right" in
 /// the block matrix. That is: we process block (i,j) *after* block
 /// (i,j-1). This is important for the column indices returned in
-/// nzentries to be ordered.
+/// nzentries to be ordered, which is a requirement for PETSc's
+/// preallocation routines.
 std::size_t
 extract_nonzeros(const PETScMatrix& M, nz_data_t& nzentries,
                  PetscInt roffset, PetscInt coffset)
