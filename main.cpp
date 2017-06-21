@@ -166,16 +166,10 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
   auto A = std::make_shared<Matrix>();
 
   // Lower right block:
-  // HACK: I really don't know how to create an empty 7x7 Matrix,
-  // so I use PETSc... duh
-  Mat tmp;
-  MatCreateAIJ(MPI_COMM_WORLD, 7, 7, 7, 7, 0, NULL, 0, NULL, &tmp);
-  MatSetUp(tmp);
-  MatAssemblyBegin(tmp, MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(tmp, MAT_FINAL_ASSEMBLY);
-  auto zeroMat = std::make_shared<PETScMatrix>(tmp);
+  auto zeroMat = B.get_zero_padding();
   auto zeroVec = std::make_shared<Vector>();
-  zeroMat->init_vector(*zeroVec, 0);   // second arg is dim, meaning *zeroVec = Ax for some x
+  // second arg is dim, meaning *zeroVec = Ax for some x
+  zeroMat->init_vector(*zeroVec, 0);
 
   auto block_Mk = std::make_shared<BlockMatrix>(2, 2);
   block_Mk->set_block(0, 0, A);

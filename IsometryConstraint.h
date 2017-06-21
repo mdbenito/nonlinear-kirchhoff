@@ -6,6 +6,7 @@
 
 namespace dolfin {
 
+  class GenericMatrix;
   class Matrix;
   class FunctionSpace;
   template <class T> class VertexFunction;
@@ -56,6 +57,12 @@ namespace dolfin {
     /// system matrix. Note that BlockMatrix requires pointers to
     /// non-const Matrix so we cannot const it here
     std::shared_ptr<Matrix> get_transposed() { return _Bt; }
+
+    /// Return an emptz matrix of the size required to complete the
+    /// full system matrix after appending B and Bt, i.e. 13x13. This
+    /// is just a convenience function which cleans up a bit the main
+    /// program.
+    static std::shared_ptr<GenericMatrix> get_zero_padding();
   };
 }
 
