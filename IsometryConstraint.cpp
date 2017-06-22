@@ -218,17 +218,17 @@ namespace dolfin {
         /* values[6] = 0.0; */    values[7]  =   Y[dofs[2]];     values[8] =   Y[dofs[1]];
         /* values[9] = 0.0; */ /* values[10] =          0.0; */ values[11] = 2*Y[dofs[2]];
 
-        std::cout << "Updating row " << rows[0] << " with " << values[1]
-                  << " at dof " << dofs[1] << " for vertex " << v->index() << "\n";
+        // std::cout << "Updating row " << rows[0] << " with " << values[1]
+        //           << " at dof " << dofs[1] << " for vertex " << v->index() << "\n";
         _B->set(&(values[1]), 1, &(rows[0]), 1, &(dofs[1]));
-        std::cout << "Updating row " << rows[1] << " with " << values[4] << ", " << values[5]
-                  << " at dofs " << dofs[1] << ", " << dofs[2] << " for vertex " << v->index() << "\n";
+        // std::cout << "Updating row " << rows[1] << " with " << values[4] << ", " << values[5]
+        //           << " at dofs " << dofs[1] << ", " << dofs[2] << " for vertex " << v->index() << "\n";
         _B->set(&(values[4]), 1, &(rows[1]), 2, &(dofs[1]));
-        std::cout << "Updating row " << rows[2] << " with " << values[7] << ", " << values[8]
-                  << " at dofs " << dofs[1] << ", " << dofs[2] << " for vertex " << v->index() << "\n";
+        // std::cout << "Updating row " << rows[2] << " with " << values[7] << ", " << values[8]
+        //           << " at dofs " << dofs[1] << ", " << dofs[2] << " for vertex " << v->index() << "\n";
         _B->set(&(values[7]), 1, &(rows[2]), 2, &(dofs[1]));
-        std::cout << "Updating row " << rows[3] << " with " << values[11]
-                  << " at dof " << dofs[2] << " for vertex " << v->index() << "\n";
+        // std::cout << "Updating row " << rows[3] << " with " << values[11]
+        //           << " at dof " << dofs[2] << " for vertex " << v->index() << "\n";
         _B->set(&(values[11]), 1, &(rows[3]), 1, &(dofs[2]));
 
 
