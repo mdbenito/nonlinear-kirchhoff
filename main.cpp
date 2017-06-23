@@ -12,6 +12,7 @@
 #include "BlockMatrixAdapter.h"
 #include "BlockVectorAdapter.h"
 #include "output.h"
+#include "sweet/options.hpp"
 
 using namespace dolfin;
 
@@ -320,15 +321,37 @@ test_dofs(std::shared_ptr<RectangleMesh> mesh)
 int
 main(int argc, char** argv)
 {
+  //// Default options
+  int m = 4, n = 4;
+  double alpha = 1.0;
+  double tau = 1e-6;
+  int max_steps = 24;
+  double eps = 1e-6;  // TODO: unused
+  int verbose = 0;    // TODO: unused
+  std::string diagonal = "right";
+
+  bool help = false;
+  sweet::Options opt(argc, const_cast<char**>(argv),
+                     "Nonlinear Kirchhoff model on the unit square.");
+  opt.get("-h", "--help", "Show this help", help);
+  opt.get("-v", "--verbose", "Verbosity level, 0-3 (TODO)", verbose);
+  opt.get("-m", "--num_vertical", "number of vertical subdivisions", m);
+  opt.get("-n", "--num_horizontal", "number of horizontal subdivisions", n);
+  opt.get("-d", "--diagonal", "Direction of diagonals: \"left\", \"right\", \"left/right\", \"crossed\"", diagonal);
+  opt.get("-a", "--alpha", "alpha", alpha);
+  opt.get("-t", "--tau", "timestep *scaling*", tau);
+  opt.get("-x", "--max_steps", "Maximum number of time steps", max_steps);
+  opt.get("-e", "--eps_stop", "Stopping threshold (TODO)", eps);
+  if (opt.help_requested())
+    return 1;
+
   auto mesh = std::make_shared<RectangleMesh>(MPI_COMM_WORLD,
                                               Point (0.0, 0.0), Point (1.0, 1.0),
-                                              6, 6, "crossed");
-  double alpha = 1.0;
+                                              m, n, diagonal);
+  
   // In the paper the triangulation consists of halved squares
   // and tau is the length of the sides i.e. hmin() in our case.
-  double tau = mesh->hmin() / 1e10;
-
-  int max_steps = 20;
-
+  tau *= mesh->hmin();
+  
   return dostuff(mesh, alpha, tau, max_steps);
 }
