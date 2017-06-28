@@ -121,7 +121,7 @@ round_zeros(GenericVector& v, double precision=1e-6)
 ///
 /// TODO: allow an adaptive step size policy
 int
-dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
+dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
         int max_steps)
 {
   KirchhoffAssembler assembler;
