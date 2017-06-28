@@ -25,9 +25,6 @@ namespace dolfin {
     /// A copy of the transposed Constraint matrix. Stored for speed.
     /// TODO: test whether this is indeed faster
     std::shared_ptr<Matrix> _Bt;
-
-    /// This marks points on the Dirichlet boundary
-    std::shared_ptr<const VertexFunction<bool>> _boundary;
     
     std::shared_ptr<TensorLayout> _B_tensor_layout;
     std::shared_ptr<TensorLayout> _Bt_tensor_layout;
@@ -42,8 +39,7 @@ namespace dolfin {
     /// (the gradient updates) have homogenous Dirichlet conditions,
     /// in order for the updated solutions to fulfill the real
     /// Dirichlet BCs.
-    IsometryConstraint(const FunctionSpace& W,
-                       std::shared_ptr<const VertexFunction<bool>> boundary_marker);
+    IsometryConstraint(const FunctionSpace& W);
 
     /// Updates the constraint with the values from Y. See the doc.
     void update_with(const Function& Y);

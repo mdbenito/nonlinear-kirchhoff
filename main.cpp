@@ -5,6 +5,7 @@
 #include <tuple>
 #include <cmath>
 #include <dolfin.h>
+#include <dolfin/fem/DirichletBC.h>
 
 #include "NonlinearKirchhoff.h"
 #include "IsometryConstraint.h"
@@ -43,6 +44,15 @@ class RightBoundary : public SubDomain
     return near(x[0], 1);
   }
 };
+
+class FullBoundary : public SubDomain
+{
+  bool inside(const Array<double>& x, bool on_boundary) const
+  {
+    return on_boundary;
+  }
+};
+
 
 class BoundaryData : public Expression
 {
@@ -103,7 +113,6 @@ round_zeros(GenericVector& v, double precision=1e-6)
 }
 
 
-
 /// Does the magic.
 ///
 ///   mesh: duh.
@@ -126,6 +135,14 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
   std::cout << "FE space has " << W3->dim() << " dofs.\n";
   std::cout << "Using alpha = " << alpha << ", tau = " << tau << ".\n";
 
+  // The stiffness matrix includes the condition for the nodes on the
+  // Dirichlet boundary to be zero. This ensures that the updates
+  // don't change the values of the initial condition, which should
+  // fulfill the BC
+  auto bdry = std::make_shared<FullBoundary>();
+  auto zero = std::shared_ptr<Function>(std::move(project_dkt(std::make_shared<Constant>(0.0, 0.0, 0.0), W3)));
+  DirichletBC bc(W3, zero, bdry);
+
   Table table("Assembly and application of BCs");
 
   std::cout << "Projecting initial data onto W^3... ";
@@ -134,26 +151,13 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
   auto y0 = project_dkt(std::make_shared<BoundaryData>(), W3);
   table("Projection of y0", "time") = toc();
   std::cout << "Done.\n";
-  {
-    auto& v = *(y0->vector());
-    round_zeros(v);
-    dump_full_tensor(v, 4, "y0.txt");
-  }
   
-  
-  // The discretised isometry constraint includes the condition for
-  // the nodes on the Dirichlet boundary to be zero. This ensures that
-  // the updates don't change the values of the initial condition,
-  // which should fulfill the BC
-  auto  left = std::make_shared<LeftBoundary>();  
-  auto right = std::make_shared<RightBoundary>();
-  auto dirichlet_boundary =
-    std::make_shared<VertexFunction<bool>>(mesh, false);
-  left->mark(*dirichlet_boundary, true);
-  right->mark(*dirichlet_boundary, true);
+  auto& v = *(y0->vector());
+  round_zeros(v);
+  dump_full_tensor(v, 4, "y0.txt");
   
   std::cout << "Initialising constraint... ";
-  IsometryConstraint B(*W3, dirichlet_boundary);
+  IsometryConstraint B(*W3);
   std::cout << "Done.\n";
 
   std::cout << "Populating constraint... ";
@@ -162,7 +166,7 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
   table("Constraint updates", "time") = toc();
   std::cout << "Done.\n";
 
-  dump_full_tensor(*B.get(), 12, "B0.txt");
+  // dump_full_tensor(*B.get(), 12, "B0.txt");
 
   // Upper left block in the full matrix (constant)
   auto A = std::make_shared<Matrix>();
@@ -194,10 +198,11 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
   assembler.assemble(*A, a, p22);
   auto Ao = A->copy();   // Store copy to compute the RHS later,
   *A *= 1 + alpha*tau;   // because we transform A here
+  bc.apply(*A);
   table("Assembly", "time") = toc();
   dump_full_tensor(*A, 12, "A.txt");
   std::cout << "Done.\n";
-
+  
   // This requires that the nonzeros for the blocks be already set up
   BlockMatrixAdapter Mk(block_Mk); 
   Mk.read(0,0);  // Read in A, we read the rest in the loop
@@ -250,11 +255,12 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
     A->mult(*(y.vector()), *top_Fk);
     *top_Fk -= L;
     *top_Fk *= -tau;
+    bc.apply(*top_Fk);
     Fk.read(0);
     table("RHS computation", "time") =
       table.get_value("RHS computation", "time") + toc();
     std::cout << "Done.\n";
-    dump_full_tensor(Fk.get(), 12, "Fk.txt");
+    // dump_full_tensor(Fk.get(), 12, "Fk.txt");
     
     std::cout << "Updating discrete isometry constraint... ";
     tic();

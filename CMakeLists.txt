@@ -88,6 +88,7 @@ endforeach(UFL_FILENAME)
 
 add_executable(${PROJECT_NAME} ${FFC_GENERATED_SOURCES}
   IsometryConstraint.cpp
+  HermiteDirichletBC.cpp
   KirchhoffAssembler.cpp
   DKTGradient.cpp
   BlockMatrixAdapter.cpp

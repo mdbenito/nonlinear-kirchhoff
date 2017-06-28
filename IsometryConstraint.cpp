@@ -6,11 +6,8 @@
 
 namespace dolfin {
 
-  IsometryConstraint::IsometryConstraint(
-      const FunctionSpace& W,
-      std::shared_ptr<const VertexFunction<bool>> boundary_marker)
+  IsometryConstraint::IsometryConstraint(const FunctionSpace& W)
     : _v2d(vertex_to_dof_map(W)),
-      _boundary(boundary_marker),
       _B(std::make_shared<Matrix>()), _Bt(std::make_shared<Matrix>())
   {
     const Mesh& mesh = *(W.mesh());
@@ -37,15 +34,13 @@ namespace dolfin {
       _B_tensor_layout = _B->factory().create_layout(2);  // rank 2 tensor
       dolfin_assert(_B_tensor_layout);  // when can that fail?
 
-      // FIXME: is this ok? every process should own a 13xN block
+      // FIXME: is this ok? every process should own a 4xN block
       std::cout << "\t\tCHECK ME: IndexMap should init all global indices as local.\n";
-      auto row_index_map = std::make_shared<IndexMap>(mesh.mpi_comm(), 13, 1);
+      auto row_index_map = std::make_shared<IndexMap>(mesh.mpi_comm(), 4, 1);
       row_index_map->set_local_to_global(std::vector<std::size_t>());  // OK?
 
       std::vector<std::shared_ptr<const IndexMap>> index_maps
         { row_index_map, W.dofmap()->index_map() };
-
-      auto local_column_range = W.dofmap()->ownership_range();
 
       _B_tensor_layout->init(mesh.mpi_comm(), index_maps,
                              TensorLayout::Ghosts::UNGHOSTED);
@@ -65,17 +60,6 @@ namespace dolfin {
           dofs[1] = _v2d[9*v->index() + 3*sub + 1];
           dofs[2] = _v2d[9*v->index() + 3*sub + 2];
           
-          // Enforce homogeneous Dirichlet BCs by fixing dofs at
-          // Dirichlet nodes
-          if ((*_boundary)[*v]) {
-            // Offset by the first 3 cols, which are for the constraints            
-            pattern->insert_global(4 + 3*sub, dofs[0]);
-            pattern->insert_global(4 + 3*sub+1, dofs[1]);
-            pattern->insert_global(4 + 3*sub+2, dofs[2]);
-            // std::cout <<"B: Dirichlet node at " << 4+sub << ", " << dofs[0] << "\n";
-            continue;
-          }
-
           pattern->insert_global(0, dofs[1]);
           pattern->insert_global(1, dofs[1]);
           pattern->insert_global(1, dofs[2]);
@@ -96,8 +80,8 @@ namespace dolfin {
       _Bt_tensor_layout = _Bt->factory().create_layout(2);  // 2 is the rank
       dolfin_assert(_Bt_tensor_layout);  // what for?
 
-      // FIXME: is this ok? every process should own a Nx13 block
-      auto col_index_map = std::make_shared<IndexMap>(mesh.mpi_comm(), 13, 1);
+      // FIXME: is this ok? every process should own a Nx4 block
+      auto col_index_map = std::make_shared<IndexMap>(mesh.mpi_comm(), 4, 1);
       col_index_map->set_local_to_global(std::vector<std::size_t>());  // OK?
 
       std::vector<std::shared_ptr<const IndexMap>> index_maps
@@ -123,17 +107,6 @@ namespace dolfin {
           dofs[0] = _v2d[9*v->index() + 3*sub];
           dofs[1] = _v2d[9*v->index() + 3*sub + 1];
           dofs[2] = _v2d[9*v->index() + 3*sub + 2];
-
-          // Enforce homogeneous Dirichlet BCs by fixing dofs at
-          // Dirichlet nodes
-          if ((*_boundary)[*v]) {
-            // Offset by the first 3 cols, which are for the constraints
-            pattern->insert_global(dofs[0], 4 + 3*sub);
-            pattern->insert_global(dofs[1], 4 + 3*sub+1);
-            pattern->insert_global(dofs[2], 4 + 3*sub+2);
-            // std::cout <<"Bt: Dirichlet node at " << dofs[0] << ", " << 4+sub << "\n";
-            continue;
-          }
           
           pattern->insert_global(dofs[1], 0);
           pattern->insert_global(dofs[1], 1);
@@ -149,37 +122,6 @@ namespace dolfin {
       // std::cout << "Pattern:\n" << pattern->str(true) << "\n";      
     }
 
-    // more lazy me...  Enforce homogeneous Dirichlet BCs by fixing
-    // dofs at Dirichlet nodes. Remember that first derivatives are
-    // also essential BCs so we need to set them with B as well.
-    la_index dofs[9];
-    la_index rows[9] = {4, 5, 6, 7, 8, 9, 10, 11, 12};
-    double value = 1.0;
-    for (VertexIterator v(mesh); !v.end(); ++v)
-    {
-      if ((*_boundary)[*v]) {
-        for (int sub = 0; sub < 3; ++sub) {
-          // Function value, derivative wrt.x, derivative wrt. y
-          dofs[3*sub] = _v2d[9*v->index() + 3*sub];
-          dofs[3*sub+1] = _v2d[9*v->index() + 3*sub + 1];
-          dofs[3*sub+2] = _v2d[9*v->index() + 3*sub + 2];
-
-          // FIXME: There HAS to be a better way than using 9 calls to
-          // set() per vertex (and matrix)
-          _B->set(&value, 1, &(rows[3*sub]), 1, &(dofs[3*sub]));
-          _B->set(&value, 1, &(rows[3*sub+1]), 1, &(dofs[3*sub+1]));
-          _B->set(&value, 1, &(rows[3*sub+2]), 1, &(dofs[3*sub+2]));
-
-          _Bt->set(&value, 1, &(dofs[3*sub]), 1, &(rows[3*sub]));
-          _Bt->set(&value, 1, &(dofs[3*sub+1]), 1, &(rows[3*sub+1]));
-          _Bt->set(&value, 1, &(dofs[3*sub+2]), 1, &(rows[3*sub+2]));  
-        }
-        // std::cout << "Dirichlet at: ";
-        // for (int i =0; i<3; ++i)
-        //   std::cout << "(" << rows[i] << ", " << dofs[i] << ") ";        
-        // std::cout << "\n";
-      }
-    }
     std::cout << "FIXME! IsometryConstraint: apply() at construction causes PETSc err out of bounds later\n";
     // _B->apply("insert");
     // _Bt->apply("insert");
@@ -199,11 +141,6 @@ namespace dolfin {
     
     for (VertexIterator v(mesh); !v.end(); ++v)
     {
-      // Enforce homogeneous Dirichlet BCs by omitting dofs at
-      // Dirichlet nodes
-      if ((*_boundary)[*v])
-        continue;
-
       // std::cout << "\nVertex " << v->index() ":\n\n";
       for (int sub = 0; sub < 3; ++sub)   // iterate over the 3 subspaces
       {
@@ -254,10 +191,10 @@ namespace dolfin {
   std::shared_ptr<GenericMatrix>
   IsometryConstraint::get_zero_padding()
   {
-    // HACK: I really don't know how to create an empty 13x13
+    // HACK: I really don't know how to create an empty 4x4
     // dolfin::Matrix, so I use PETSc... duh
     Mat tmp;
-    MatCreateAIJ(MPI_COMM_WORLD, 13, 13, 13, 13, 0, NULL, 0, NULL, &tmp);
+    MatCreateAIJ(MPI_COMM_WORLD, 4, 4, 4, 4, 0, NULL, 0, NULL, &tmp);
     MatSetUp(tmp);
     MatAssemblyBegin(tmp, MAT_FINAL_ASSEMBLY);
     MatAssemblyEnd(tmp, MAT_FINAL_ASSEMBLY);
