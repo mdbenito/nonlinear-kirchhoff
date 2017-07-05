@@ -20,7 +20,6 @@
 #include <dolfin/fem/Form.h>
 #include <dolfin/fem/UFC.h>
 #include <dolfin/fem/FiniteElement.h>
-// #include <dolfin/fem/OpenMpAssembler.h>
 #include <dolfin/fem/AssemblerBase.h>
 
 #include "KirchhoffAssembler.h"
@@ -36,28 +35,6 @@ KirchhoffAssembler::assemble(GenericMatrix& A,
                              const Form& a,
                              const Form& p22form)
 {
-
-  // Check whether we should call the multi-core assembler
-  // MBD FIXME: implement this / throw right exception
-
-  #ifdef I_DONTHAVE_HAS_OPENMP
-  // This global parameter is not in the global parameter list
-  // and dolfin throws a runtime error:
-  const std::size_t num_threads = parameters["num_threads"];
-  // Solve with:
-  //dolfin::parameters.add("num_threads", 0);
-  // Or by disabling the whole chunk in the ifdef, as I did.
-  if (num_threads > 0)
-  {
-    OpenMpAssembler assembler;
-    assembler.add_values = add_values;
-    assembler.finalize_tensor = finalize_tensor;
-    assembler.keep_diagonal = keep_diagonal;
-    assembler.assemble(A, a);
-    return;
-  }
-  #endif
-
   // Get cell, exterior / interior facet and vertex domains
   // (std::shared_ptr<const MeshFunction<std::size_t>>)
   auto cell_domains = a.cell_domains();
