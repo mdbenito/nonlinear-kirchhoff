@@ -42,6 +42,7 @@ namespace dolfin {
       std::vector<std::shared_ptr<const IndexMap>> index_maps
         { row_index_map, W.dofmap()->index_map() };
 
+      auto local_col_range = W.dofmap()->ownership_range();
       _B_tensor_layout->init(mesh.mpi_comm(), index_maps,
                              TensorLayout::Ghosts::UNGHOSTED);
 
@@ -59,13 +60,18 @@ namespace dolfin {
           dofs[0] = _v2d[9*v->index() + 3*sub];
           dofs[1] = _v2d[9*v->index() + 3*sub + 1];
           dofs[2] = _v2d[9*v->index() + 3*sub + 2];
-          
-          pattern->insert_global(0, dofs[1]);
-          pattern->insert_global(1, dofs[1]);
-          pattern->insert_global(1, dofs[2]);
-          pattern->insert_global(2, dofs[1]);
-          pattern->insert_global(2, dofs[2]);
-          pattern->insert_global(3, dofs[2]);
+          if (dofs[1] >= local_col_range.first && dofs[1] < local_col_range.second)
+          {
+            pattern->insert_global(0, dofs[1]);
+            pattern->insert_global(1, dofs[1]);
+            pattern->insert_global(2, dofs[1]);
+          }
+          if (dofs[2] >= local_col_range.first && dofs[2] < local_col_range.second)
+          {
+            pattern->insert_global(1, dofs[2]);
+            pattern->insert_global(2, dofs[2]);
+            pattern->insert_global(3, dofs[2]);
+          }
         }
       }
       pattern->apply();
@@ -107,13 +113,20 @@ namespace dolfin {
           dofs[0] = _v2d[9*v->index() + 3*sub];
           dofs[1] = _v2d[9*v->index() + 3*sub + 1];
           dofs[2] = _v2d[9*v->index() + 3*sub + 2];
+
+          if (dofs[1] >= local_row_range.first && dofs[1] < local_row_range.second)
+          {
+            pattern->insert_global(dofs[1], 0);
+            pattern->insert_global(dofs[1], 1);
+            pattern->insert_global(dofs[1], 2);
+          }
+          if (dofs[2] >= local_row_range.first && dofs[2] < local_row_range.second)
+          {
+            pattern->insert_global(dofs[2], 2);
+            pattern->insert_global(dofs[2], 3);
+            pattern->insert_global(dofs[2], 1);
+          }
           
-          pattern->insert_global(dofs[1], 0);
-          pattern->insert_global(dofs[1], 1);
-          pattern->insert_global(dofs[1], 2);
-          pattern->insert_global(dofs[2], 1);
-          pattern->insert_global(dofs[2], 2);
-          pattern->insert_global(dofs[2], 3);
         }
       }
       pattern->apply();
@@ -137,7 +150,7 @@ namespace dolfin {
 
     const auto& mesh = *(y.function_space()->mesh());
     const auto& Y = *(y.vector());
-    // assert(Y.local_range() == _B.local_range());   // WTF??
+    assert(Y.local_range() == _B.local_range());   // WTF??
     
     for (VertexIterator v(mesh); !v.end(); ++v)
     {
