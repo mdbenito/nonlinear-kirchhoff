@@ -136,7 +136,7 @@ BlockMatrixAdapter::assemble()
   //// (re)build _A
   //// We need to format the sparsity data into CSR for
   // MatMPIAIJSetPreallocationCSR() and MatSeqAIJSetPreallocationCSR()
-  // NOTE: it is best to call both functions to avoid crashing when not
+  // NOTE: it is required to call both functions to avoid crashing when not
   // working in either mode (sequential/parallel)
 
   // This has length nrows+1, so the length of the last row is known

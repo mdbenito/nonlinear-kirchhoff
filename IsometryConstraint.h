@@ -18,6 +18,8 @@ namespace dolfin {
   /// paper for more info.
   class IsometryConstraint
   {
+    /// Vertex id to global dof numbers. Keep in mind the offsets due
+    /// to DKT being (sort of) a "mixed" function space.
     std::vector<int> _v2d;
     /// The Constraint matrix. This is going to be used in a BlockMatrix
     /// which requires shared ownership via a shared_ptr.
@@ -32,13 +34,7 @@ namespace dolfin {
   public:
     /// Constructor
     ///
-    /// Initialises the sparsity pattern for the constraint
-    /// matrix. The VertexFunction boundary_marker tags all vertices
-    /// at the Dirichlet boundary. Recall that the constraint matrix
-    /// must encode the condition that the solutions to the system
-    /// (the gradient updates) have homogenous Dirichlet conditions,
-    /// in order for the updated solutions to fulfill the real
-    /// Dirichlet BCs.
+    /// Initialises the sparsity pattern for the constraint matrix.
     IsometryConstraint(const FunctionSpace& W);
 
     /// Updates the constraint with the values from Y. See the doc.
@@ -54,10 +50,9 @@ namespace dolfin {
     /// non-const Matrix so we cannot const it here
     std::shared_ptr<Matrix> get_transposed() { return _Bt; }
 
-    /// Return an emptz matrix of the size required to complete the
-    /// full system matrix after appending B and Bt, i.e. 13x13. This
-    /// is just a convenience function which cleans up a bit the main
-    /// program.
+    /// Return an empty matrix of the size required to complete the
+    /// full system matrix after appending B and Bt. This is just a
+    /// convenience function which cleans up a bit the main program.
     static std::shared_ptr<GenericMatrix> get_zero_padding();
   };
 }
