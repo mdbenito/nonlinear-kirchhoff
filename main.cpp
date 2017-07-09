@@ -5,7 +5,7 @@
 #include <tuple>
 #include <cmath>
 #include <dolfin.h>
-#include <dolfin/fem/DirichletBC.h>
+#include <unistd.h>
 
 #include "NonlinearKirchhoff.h"
 #include "IsometryConstraint.h"
@@ -358,6 +358,20 @@ main(int argc, char** argv)
   // In the paper the triangulation consists of halved squares
   // and tau is the length of the sides i.e. hmin() in our case.
   tau *= mesh->hmin();
+
+
+  {
+    int world_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    char processor_name[MPI_MAX_PROCESSOR_NAME];
+    int name_len;
+    MPI_Get_processor_name(processor_name, &name_len);
+    int i = 0;
+    std::cout << "PID " << getpid() << " on " << processor_name
+              << " (rank " << world_rank << ") ready for attach\n" << std::flush;
+    while (0 == i)
+        sleep(5);
+  }
   
   return dostuff(mesh, alpha, tau, max_steps);
 }
