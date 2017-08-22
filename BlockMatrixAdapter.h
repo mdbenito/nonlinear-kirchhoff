@@ -8,11 +8,14 @@ namespace dolfin {
 
   class BlockMatrix;
   class PETScMatrix;
-  
-  /// Ideally I'd implmement the interface of a GenericLinearOperator,
+
+  ///// A BlockMatrixAdapter is a flattened interface to a BlockMatrix.
+  /// Ideally I'd implement the interface of a GenericLinearOperator,
   /// but I don't know how hard that could become if solve() is to be
-  /// supported.  For now I just build a bigger matrix using the
+  /// supported. For now I just build a bigger matrix using the
   /// sparsity patterns of the blocks and copying the data.
+  /// This is extremely inefficient but not much of an issue in our
+  /// use case.
   class BlockMatrixAdapter
   {
     std::shared_ptr<const BlockMatrix> _AA;   // Block matrix

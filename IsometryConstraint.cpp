@@ -6,11 +6,8 @@
 
 namespace dolfin {
 
-  IsometryConstraint::IsometryConstraint(
-      const FunctionSpace& W,
-      std::shared_ptr<const VertexFunction<bool>> boundary_marker)
+  IsometryConstraint::IsometryConstraint(const FunctionSpace& W)
     : _v2d(vertex_to_dof_map(W)),
-      _boundary(boundary_marker),
       _B(std::make_shared<Matrix>()), _Bt(std::make_shared<Matrix>())
   {
     const Mesh& mesh = *(W.mesh());
@@ -34,153 +31,124 @@ namespace dolfin {
     // const auto& v2d = W.dofmap()->dofs(mesh, 0);
 
     {
-      _B_tensor_layout = _B->factory().create_layout(2);  // rank 2 tensor
-      dolfin_assert(_B_tensor_layout);  // when can that fail?
+      _B_tensor_layout = _B->factory().create_layout(2);    // rank 2 tensor
+      dolfin_assert(_B_tensor_layout);                      // when can that fail?
+      _Bt_tensor_layout = _Bt->factory().create_layout(2);
+      dolfin_assert(_Bt_tensor_layout);
 
-      // FIXME: is this ok? every process should own a 13xN block
-      std::cout << "\t\tCHECK ME: IndexMap should init all global indices as local.\n";
-      auto row_index_map = std::make_shared<IndexMap>(mesh.mpi_comm(), 13, 1);
-      row_index_map->set_local_to_global(std::vector<std::size_t>());  // OK?
+      // std::cout << "\t\tCHECK ME: IndexMap init ok?\n";
+      auto nvert = mesh.num_vertices();
+      // std::cout << "\t\tnvert = " << nvert << "\n";
+      auto row_index_map_B = std::make_shared<IndexMap>(mesh.mpi_comm(), nvert*4, 1);
+      // row_index_map->set_local_to_global(std::vector<std::size_t>());  // How?
+      auto col_index_map_Bt = std::make_shared<IndexMap>(mesh.mpi_comm(), nvert*4, 1);
+      // col_index_map_Bt->set_local_to_global(std::vector<std::size_t>());  // How?
 
-      std::vector<std::shared_ptr<const IndexMap>> index_maps
-        { row_index_map, W.dofmap()->index_map() };
-
-      auto local_column_range = W.dofmap()->ownership_range();
-
-      _B_tensor_layout->init(mesh.mpi_comm(), index_maps,
+      std::vector<std::shared_ptr<const IndexMap>> index_maps_B
+        { row_index_map_B, W.dofmap()->index_map() };
+      _B_tensor_layout->init(mesh.mpi_comm(), index_maps_B,
                              TensorLayout::Ghosts::UNGHOSTED);
+      
+      auto local_col_range_B = W.dofmap()->ownership_range();
+      auto pattern_B = _B_tensor_layout->sparsity_pattern();
+      dolfin_assert(pattern_B);   // when can the pattern be null?
+      pattern_B->init(mesh.mpi_comm(), index_maps_B);
 
-      auto pattern = _B_tensor_layout->sparsity_pattern();
-      dolfin_assert(pattern);   // when can the pattern be null?
-
-      pattern->init(mesh.mpi_comm(), index_maps);
-      // Build sparsity pattern
-      std::size_t dofs[3];  // in order: point eval, dx, dy
-      for (VertexIterator v(mesh); !v.end(); ++v)
-      {
-        // iterate over the 3 subspaces
-        for (int sub = 0; sub < 3; ++sub)
-        {
-          dofs[0] = _v2d[9*v->index() + 3*sub];
-          dofs[1] = _v2d[9*v->index() + 3*sub + 1];
-          dofs[2] = _v2d[9*v->index() + 3*sub + 2];
-          
-          // Enforce homogeneous Dirichlet BCs by fixing dofs at
-          // Dirichlet nodes
-          if ((*_boundary)[*v]) {
-            // Offset by the first 3 cols, which are for the constraints            
-            pattern->insert_global(4 + 3*sub, dofs[0]);
-            pattern->insert_global(4 + 3*sub+1, dofs[1]);
-            pattern->insert_global(4 + 3*sub+2, dofs[2]);
-            // std::cout <<"B: Dirichlet node at " << 4+sub << ", " << dofs[0] << "\n";
-            continue;
-          }
-
-          pattern->insert_global(0, dofs[1]);
-          pattern->insert_global(1, dofs[1]);
-          pattern->insert_global(1, dofs[2]);
-          pattern->insert_global(2, dofs[1]);
-          pattern->insert_global(2, dofs[2]);
-          pattern->insert_global(3, dofs[2]);
-        }
-      }
-      pattern->apply();
-      _B->init(*_B_tensor_layout);
-      // std::cout << "Initialised B with size " << _B->size(0) << " x " << _B->size(1) << "\n";
-      // std::cout << "Pattern:\n" << pattern->str(true) << "\n";
-    }
-
-    // This is me being lazy and sloppy...
-    // FIXME: iterate only once, you lazy ass!
-    {
-      _Bt_tensor_layout = _Bt->factory().create_layout(2);  // 2 is the rank
-      dolfin_assert(_Bt_tensor_layout);  // what for?
-
-      // FIXME: is this ok? every process should own a Nx13 block
-      auto col_index_map = std::make_shared<IndexMap>(mesh.mpi_comm(), 13, 1);
-      col_index_map->set_local_to_global(std::vector<std::size_t>());  // OK?
-
-      std::vector<std::shared_ptr<const IndexMap>> index_maps
-      { W.dofmap()->index_map(), col_index_map };
-
-      auto local_row_range = W.dofmap()->ownership_range();
-
-      _Bt_tensor_layout->init(mesh.mpi_comm(), index_maps,
+      std::vector<std::shared_ptr<const IndexMap>> index_maps_Bt
+      { W.dofmap()->index_map(), col_index_map_Bt };
+      _Bt_tensor_layout->init(mesh.mpi_comm(), index_maps_Bt,
                               TensorLayout::Ghosts::UNGHOSTED);
 
-      auto pattern = _Bt_tensor_layout->sparsity_pattern();
-      dolfin_assert(pattern)
-      pattern->init(mesh.mpi_comm(), index_maps);
+      auto local_row_range_Bt = W.dofmap()->ownership_range();
+      auto pattern_Bt = _Bt_tensor_layout->sparsity_pattern();
+      dolfin_assert(pattern_Bt)
+      pattern_Bt->init(mesh.mpi_comm(), index_maps_Bt);
     
-      // _Build sparsity pattern
-      std::size_t dofs[3];
+      // Build sparsity pattern
+      la_index dofs[3];  // in order: point eval, dx, dy
       for (VertexIterator v(mesh); !v.end(); ++v)
       {
         // iterate over the 3 subspaces
         for (int sub = 0; sub < 3; ++sub)
         {
+          // Thw following should be a process-local index
+          auto idx = static_cast<la_index>(v->index());
 
-          dofs[0] = _v2d[9*v->index() + 3*sub];
-          dofs[1] = _v2d[9*v->index() + 3*sub + 1];
-          dofs[2] = _v2d[9*v->index() + 3*sub + 2];
-
-          // Enforce homogeneous Dirichlet BCs by fixing dofs at
-          // Dirichlet nodes
-          if ((*_boundary)[*v]) {
-            // Offset by the first 3 cols, which are for the constraints
-            pattern->insert_global(dofs[0], 4 + 3*sub);
-            pattern->insert_global(dofs[1], 4 + 3*sub+1);
-            pattern->insert_global(dofs[2], 4 + 3*sub+2);
-            // std::cout <<"Bt: Dirichlet node at " << dofs[0] << ", " << 4+sub << "\n";
-            continue;
+          dofs[0] = _v2d[9*idx + 3*sub];
+          dofs[1] = _v2d[9*idx + 3*sub + 1];
+          dofs[2] = _v2d[9*idx + 3*sub + 2];
+          // B
+          std::vector<ArrayView<const la_index>> entries;
+          if (dofs[1] >= local_col_range_B.first && dofs[1]
+              < local_col_range_B.second)
+          {
+            la_index arr_i[] = {4*idx+0, 4*idx+1, 4*idx+2};
+            la_index arr_j[] = {dofs[1], dofs[1], dofs[1]};
+            auto map_i = ArrayView<const la_index>(3, arr_i);
+            auto map_j = ArrayView<const la_index>(3, arr_j);
+            entries.push_back(map_i);
+            entries.push_back(map_j);
+            pattern_B->insert_local(entries);
+            // pattern_B->insert_local(4*idx+0, dofs[1]);
+            // pattern_B->insert_local(4*idx+1, dofs[1]);
+            // pattern_B->insert_local(4*idx+2, dofs[1]);
           }
-          
-          pattern->insert_global(dofs[1], 0);
-          pattern->insert_global(dofs[1], 1);
-          pattern->insert_global(dofs[1], 2);
-          pattern->insert_global(dofs[2], 1);
-          pattern->insert_global(dofs[2], 2);
-          pattern->insert_global(dofs[2], 3);
+          if (dofs[2] >= local_col_range_B.first && dofs[2]
+              < local_col_range_B.second)
+          {
+            la_index arr_i[] = {4*idx+1, 4*idx+2, 4*idx+3};
+            la_index arr_j[] = {dofs[2], dofs[2], dofs[2]};
+            auto map_i = ArrayView<const la_index>(3, arr_i);
+            auto map_j = ArrayView<const la_index>(3, arr_j);
+            entries.push_back(map_i);
+            entries.push_back(map_j);
+            pattern_B->insert_local(entries);
+            // pattern_B->insert_local(4*idx+1, dofs[2]);
+            // pattern_B->insert_local(4*idx+2, dofs[2]);
+            // pattern_B->insert_local(4*idx+3, dofs[2]);
+          }
+          // Bt
+          if (dofs[1] >= local_row_range_Bt.first && dofs[1]
+              < local_row_range_Bt.second)
+          {
+            la_index arr_i[] = {dofs[1], dofs[1], dofs[1]};
+            la_index arr_j[] = {4*idx+0, 4*idx+1, 4*idx+2};
+            auto map_i = ArrayView<const la_index>(3, arr_i);
+            auto map_j = ArrayView<const la_index>(3, arr_j);
+            entries.push_back(map_i);
+            entries.push_back(map_j);
+            pattern_Bt->insert_local(entries);
+            // pattern_Bt->insert_global(dofs[1], 4*idx+0);
+            // pattern_Bt->insert_global(dofs[1], 4*idx+1);
+            // pattern_Bt->insert_global(dofs[1], 4*idx+2);
+          }
+          if (dofs[2] >= local_row_range_Bt.first && dofs[2]
+              < local_row_range_Bt.second)
+          {
+            la_index arr_i[] = {dofs[2], dofs[2], dofs[2]};
+            la_index arr_j[] = {4*idx+1, 4*idx+2, 4*idx+3};
+            auto map_i = ArrayView<const la_index>(3, arr_i);
+            auto map_j = ArrayView<const la_index>(3, arr_j);
+            entries.push_back(map_i);
+            entries.push_back(map_j);
+            pattern_Bt->insert_local(entries);
+            // pattern_Bt->insert_global(dofs[2], 4*idx+1);
+            // pattern_Bt->insert_global(dofs[2], 4*idx+2);
+            // pattern_Bt->insert_global(dofs[2], 4*idx+3);
+          }
         }
       }
-      pattern->apply();
+      pattern_B->apply();
+      _B->init(*_B_tensor_layout);
+      // std::cout << "Initialised B with size " << _B->size(0) << " x " << _B->size(1) << "\n";
+      // std::cout << "Pattern:\n" << pattern_B->str(true) << "\n";
+      pattern_Bt->apply();
       _Bt->init(*_Bt_tensor_layout);
       // std::cout << "Initialised Bt with size " << _Bt->size(0) << " x " << _Bt->size(1) << "\n";
-      // std::cout << "Pattern:\n" << pattern->str(true) << "\n";      
+      // std::cout << "Pattern:\n" << pattern_Bt->str(true) << "\n";      
     }
 
-    // more lazy me...  Enforce homogeneous Dirichlet BCs by fixing
-    // dofs at Dirichlet nodes. Remember that first derivatives are
-    // also essential BCs so we need to set them with B as well.
-    la_index dofs[9];
-    la_index rows[9] = {4, 5, 6, 7, 8, 9, 10, 11, 12};
-    double value = 1.0;
-    for (VertexIterator v(mesh); !v.end(); ++v)
-    {
-      if ((*_boundary)[*v]) {
-        for (int sub = 0; sub < 3; ++sub) {
-          // Function value, derivative wrt.x, derivative wrt. y
-          dofs[3*sub] = _v2d[9*v->index() + 3*sub];
-          dofs[3*sub+1] = _v2d[9*v->index() + 3*sub + 1];
-          dofs[3*sub+2] = _v2d[9*v->index() + 3*sub + 2];
-
-          // FIXME: There HAS to be a better way than using 9 calls to
-          // set() per vertex (and matrix)
-          _B->set(&value, 1, &(rows[3*sub]), 1, &(dofs[3*sub]));
-          _B->set(&value, 1, &(rows[3*sub+1]), 1, &(dofs[3*sub+1]));
-          _B->set(&value, 1, &(rows[3*sub+2]), 1, &(dofs[3*sub+2]));
-
-          _Bt->set(&value, 1, &(dofs[3*sub]), 1, &(rows[3*sub]));
-          _Bt->set(&value, 1, &(dofs[3*sub+1]), 1, &(rows[3*sub+1]));
-          _Bt->set(&value, 1, &(dofs[3*sub+2]), 1, &(rows[3*sub+2]));  
-        }
-        // std::cout << "Dirichlet at: ";
-        // for (int i =0; i<3; ++i)
-        //   std::cout << "(" << rows[i] << ", " << dofs[i] << ") ";        
-        // std::cout << "\n";
-      }
-    }
-    std::cout << "FIXME! IsometryConstraint: apply() at construction causes PETSc err out of bounds later\n";
+    // std::cout << "FIXME! IsometryConstraint: apply() at construction causes PETSc err out of bounds later. ";
     // _B->apply("insert");
     // _Bt->apply("insert");
   }
@@ -190,25 +158,21 @@ namespace dolfin {
   {
     
     la_index dofs[3] = {-1, -1, -1};
-    la_index rows[4] = {0, 1, 2, 3};
     double values[4*3] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
     const auto& mesh = *(y.function_space()->mesh());
     const auto& Y = *(y.vector());
-    // assert(Y.local_range() == _B.local_range());   // WTF??
+    assert(Y.local_range() == _B.local_range());   // WTF??
     
     for (VertexIterator v(mesh); !v.end(); ++v)
     {
-      // Enforce homogeneous Dirichlet BCs by omitting dofs at
-      // Dirichlet nodes
-      if ((*_boundary)[*v])
-        continue;
-
-      // std::cout << "\nVertex " << v->index() ":\n\n";
+      auto idx = static_cast<la_index>(v->index());   // should be local index
+      la_index rows[4] = {4*idx, 4*idx+1, 4*idx+2, 4*idx+3};
+      // std::cout << "\nVertex " << idx << ":\n\n";
       for (int sub = 0; sub < 3; ++sub)   // iterate over the 3 subspaces
       {
-        dofs[1] = _v2d[9*v->index() + 3*sub + 1];
-        dofs[2] = _v2d[9*v->index() + 3*sub + 2];
+        dofs[1] = _v2d[9*idx + 3*sub + 1];
+        dofs[2] = _v2d[9*idx + 3*sub + 2];
 
         // std::cout << "\nSubspace " << sub << ":\n";
       
@@ -219,16 +183,16 @@ namespace dolfin {
         /* values[9] = 0.0; */ /* values[10] =          0.0; */ values[11] = 2*Y[dofs[2]];
 
         // std::cout << "Updating row " << rows[0] << " with " << values[1]
-        //           << " at dof " << dofs[1] << " for vertex " << v->index() << "\n";
+                  // << " at dof " << dofs[1] << " for vertex " << v->index() << "\n";
         _B->set(&(values[1]), 1, &(rows[0]), 1, &(dofs[1]));
         // std::cout << "Updating row " << rows[1] << " with " << values[4] << ", " << values[5]
-        //           << " at dofs " << dofs[1] << ", " << dofs[2] << " for vertex " << v->index() << "\n";
+                  // << " at dofs " << dofs[1] << ", " << dofs[2] << " for vertex " << v->index() << "\n";
         _B->set(&(values[4]), 1, &(rows[1]), 2, &(dofs[1]));
         // std::cout << "Updating row " << rows[2] << " with " << values[7] << ", " << values[8]
-        //           << " at dofs " << dofs[1] << ", " << dofs[2] << " for vertex " << v->index() << "\n";
+                  // << " at dofs " << dofs[1] << ", " << dofs[2] << " for vertex " << v->index() << "\n";
         _B->set(&(values[7]), 1, &(rows[2]), 2, &(dofs[1]));
         // std::cout << "Updating row " << rows[3] << " with " << values[11]
-        //           << " at dof " << dofs[2] << " for vertex " << v->index() << "\n";
+                  // << " at dof " << dofs[2] << " for vertex " << v->index() << "\n";
         _B->set(&(values[11]), 1, &(rows[3]), 1, &(dofs[2]));
 
 
@@ -236,14 +200,14 @@ namespace dolfin {
         // std::cout << "Transpose:\n";
         // Copy the values of y into the 3x4 chunk:
         /* values[0] = 0.0;          values[1] = 0.0;         values[2] = 0.0;          values[3] = 0.0; */
-        values[4] = 2*Y[dofs[1]]; values[5] = Y[dofs[2]];  values[6] = Y[dofs[1]];   /* values[7] = 0.0; */
-        /* values[8] = 0.0; */    values[9] = Y[dofs[2]];  values[10] = Y[dofs[1]]; values[11] = 2*Y[dofs[2]];
+        values[4] = 2*Y[dofs[1]]; values[5] = Y[dofs[2]];  values[6] = Y[dofs[2]];   /* values[7] = 0.0; */
+        /* values[8] = 0.0; */    values[9] = Y[dofs[1]];  values[10] = Y[dofs[1]]; values[11] = 2*Y[dofs[2]];
       
         // std::cout << "Updating row " << dofs[1] << " with " << values[4] << ", " << values[5] << ", " << values[6]
-        //           << " at col " << rows[0] << " for vertex " << v->index() << "\n";
+                  // << " at col " << rows[0] << " for vertex " << v->index() << "\n";
         _Bt->set(&(values[4]), 1, &(dofs[1]), 3, &(rows[0]));
         // std::cout << "Updating row " << dofs[2] << " with " << values[9] << ", " << values[10] << ", " << values[11]
-        //           << " at col " << rows[1] << " for vertex " << v->index() << "\n";
+                  // << " at col " << rows[1] << " for vertex " << v->index() << "\n";
         _Bt->set(&(values[9]), 1, &(dofs[2]), 3, &(rows[1]));
       }
     }
@@ -252,15 +216,22 @@ namespace dolfin {
   }
 
   std::shared_ptr<GenericMatrix>
-  IsometryConstraint::get_zero_padding()
+  IsometryConstraint::get_padding()
   {
-    // HACK: I really don't know how to create an empty 13x13
+    // HACK: I really don't know how to create an empty n x n
     // dolfin::Matrix, so I use PETSc... duh
     Mat tmp;
-    MatCreateAIJ(MPI_COMM_WORLD, 13, 13, 13, 13, 0, NULL, 0, NULL, &tmp);
+    int N = _B->size(0);
+    MatCreateAIJ(MPI_COMM_WORLD, PETSC_DECIDE, PETSC_DECIDE, N, N,
+                 0, NULL, 0, NULL, &tmp);
     MatSetUp(tmp);
     MatAssemblyBegin(tmp, MAT_FINAL_ASSEMBLY);
     MatAssemblyEnd(tmp, MAT_FINAL_ASSEMBLY);
+    // HACK! This might be slow (not sure if 1 nonzero is preallocated)
+    // See MatShift's doc
+    // Also, careful to shift after assembly or it won't have any effect
+    MatShift(tmp, 1.0);
+    
     return std::make_shared<PETScMatrix>(tmp);
   }
 

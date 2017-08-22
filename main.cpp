@@ -5,6 +5,7 @@
 #include <tuple>
 #include <cmath>
 #include <dolfin.h>
+#include <unistd.h>
 
 #include "NonlinearKirchhoff.h"
 #include "IsometryConstraint.h"
@@ -16,31 +17,35 @@
 
 using namespace dolfin;
 
+namespace NLK { using namespace NonlinearKirchhoff; }
+
+const double LEFT = -2.0, RIGHT = 2.0, BOTTOM = 0.0, TOP = 1.0;
+  
 class Force : public Expression
 {
   void eval(Array<double>& values, const Array<double>& x) const
   {
     values[0] = 0;
     values[1] = 0;
-    values[2] = -9.8;   // TODO put some sensible value here
+    values[2] = 1e-5;
   }
   std::size_t value_rank() const { return 1; }
   std::size_t value_dimension(std::size_t i) const { return 3;}
 };
 
-class LeftBoundary : public SubDomain
+class FullBoundary : public SubDomain
 {
   bool inside(const Array<double>& x, bool on_boundary) const
   {
-    return near(x[0], 0);
+    return on_boundary;
   }
 };
 
-class RightBoundary : public SubDomain
+class LateralBoundary : public SubDomain
 {
   bool inside(const Array<double>& x, bool on_boundary) const
   {
-    return near(x[0], 1);
+    return near(x[0], LEFT) || near(x[0], RIGHT);
   }
 };
 
@@ -48,7 +53,7 @@ class BoundaryData : public Expression
 {
   void eval(Array<double>& values, const Array<double>& x) const
   {
-    values[0] = x[0];
+    values[0] = x[0] * 0.3;  // Strong lateral compression
     values[1] = x[1];
     values[2] = 0;
   }
@@ -57,10 +62,13 @@ class BoundaryData : public Expression
 };
 
 
-/// In order for this to be general, I'd need to prepare a variational
-/// problem, compile it on the fly with ffc, etc.
-// I should be returning unique_ptr, remember your Gurus of the week...
-// https://herbsutter.com/2013/05/30/gotw-90-solution-factories/
+/// Projects a GenericFunction, which should be in a P^3x2 space onto
+/// the given FunctionSpace, which should be DKT.  In order for this
+/// to be general, I'd need to prepare a variational problem here and
+/// compile it on the fly with ffc, etc. instead of "hardcoding" stuff
+/// in the UFL file.  // One should be returning unique_ptr, remember
+/// your Gurus of the week...  //
+/// https://herbsutter.com/2013/05/30/gotw-90-solution-factories/
 std::unique_ptr<Function>
 project_dkt(std::shared_ptr<const GenericFunction> what,
             std::shared_ptr<const FunctionSpace> where)
@@ -69,8 +77,8 @@ project_dkt(std::shared_ptr<const GenericFunction> what,
   Vector bp;
   LUSolver solver;
   
-  NonlinearKirchhoff::Form_project_lhs project_lhs(where, where);
-  NonlinearKirchhoff::Form_project_rhs project_rhs(where);
+  NLK::Form_project_lhs project_lhs(where, where);
+  NLK::Form_project_rhs project_rhs(where);
   std::unique_ptr<Function> f(new Function(where));
   project_rhs.g = what;  // g is a Coefficient in a P3 space (see .ufl)
   // std::cout << "    coefficient set." << "\n";
@@ -103,28 +111,40 @@ round_zeros(GenericVector& v, double precision=1e-6)
 }
 
 
-
 /// Does the magic.
 ///
 ///   mesh: duh.
 ///   alpha: Factor multiplying the bending energy term
 ///   tau: time step size
-///
+///   max_steps: stop after at most so many iterations
+///   eps: stop after the gradient of the solution changes by
+///        at most so much (TODO)
 /// TODO: allow an adaptive step size policy
 int
-dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
-        int max_steps)
+dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
+        int max_steps, double eps=1e-5)
 {
   KirchhoffAssembler assembler;
   Assembler rhs_assembler;
   PETScLUSolver solver;
 
-  auto W3 = std::make_shared<NonlinearKirchhoff::Form_dkt_FunctionSpace_0>(mesh);
-  auto T3 = std::make_shared<NonlinearKirchhoff::Form_p22_FunctionSpace_0>(mesh);
+  auto W3 = std::make_shared<NLK::Form_dkt_FunctionSpace_0>(mesh);
+  auto T3 = std::make_shared<NLK::Form_p26_FunctionSpace_0>(mesh);
 
-  std::cout << "Running on a mesh with " << mesh->num_cells() << " cells.\n";
+  std::cout << "Running on a mesh with " << mesh->num_cells()
+            << " cells.\n";
   std::cout << "FE space has " << W3->dim() << " dofs.\n";
   std::cout << "Using alpha = " << alpha << ", tau = " << tau << ".\n";
+
+  // The stiffness matrix includes the condition for the nodes on the
+  // Dirichlet boundary to be zero. This ensures that the updates
+  // during gradient descent don't change the values of the initial
+  // condition, which should fulfill the BC
+  auto bdry = std::make_shared<LateralBoundary>();
+  auto zero = std::shared_ptr<Function>
+    (std::move(project_dkt(std::make_shared<Constant>(0.0, 0.0, 0.0),
+                           W3)));
+  DirichletBC bc(W3, zero, bdry);
 
   Table table("Assembly and application of BCs");
 
@@ -134,50 +154,39 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
   auto y0 = project_dkt(std::make_shared<BoundaryData>(), W3);
   table("Projection of y0", "time") = toc();
   std::cout << "Done.\n";
-  {
-    auto& v = *(y0->vector());
-    round_zeros(v);
-    dump_full_tensor(v, 4, "y0.txt");
-  }
   
-  
-  // The discretised isometry constraint includes the condition for
-  // the nodes on the Dirichlet boundary to be zero. This ensures that
-  // the updates don't change the values of the initial condition,
-  // which should fulfill the BC
-  auto  left = std::make_shared<LeftBoundary>();  
-  auto right = std::make_shared<RightBoundary>();
-  auto dirichlet_boundary =
-    std::make_shared<VertexFunction<bool>>(mesh, false);
-  left->mark(*dirichlet_boundary, true);
-  right->mark(*dirichlet_boundary, true);
+  auto& v = *(y0->vector());
+  round_zeros(v);
+  NLK::dump_full_tensor(v, 4, "y0.txt");
   
   std::cout << "Initialising constraint... ";
-  IsometryConstraint B(*W3, dirichlet_boundary);
+  IsometryConstraint Bk(*W3);
   std::cout << "Done.\n";
 
   std::cout << "Populating constraint... ";
   tic();
-  B.update_with(*y0);
+  Bk.update_with(*y0);
   table("Constraint updates", "time") = toc();
   std::cout << "Done.\n";
 
-  dump_full_tensor(*B.get(), 12, "B0.txt");
+  // NLK::dump_full_tensor(*Bk.get(), 12, "B0.txt");
 
   // Upper left block in the full matrix (constant)
   auto A = std::make_shared<Matrix>();
 
   // Lower right block:
-  auto zeroMat = B.get_zero_padding();
+  auto paddingMat = Bk.get_padding();
   auto zeroVec = std::make_shared<Vector>();
-  // second arg is dim, meaning *zeroVec = Ax for some x
-  zeroMat->init_vector(*zeroVec, 0);
+  // second arg is dim, meaning *zeroVec can hold a product Ax for
+  // some x
+  paddingMat->init_vector(*zeroVec, 0);
 
   auto block_Mk = std::make_shared<BlockMatrix>(2, 2);
   block_Mk->set_block(0, 0, A);
-  block_Mk->set_block(1, 0, B.get());
-  block_Mk->set_block(0, 1, B.get_transposed());
-  block_Mk->set_block(1, 1, zeroMat);
+  block_Mk->set_block(1, 0, Bk.get());
+  block_Mk->set_block(0, 1, Bk.get_transposed());
+  block_Mk->set_block(1, 1, paddingMat);
+  NLK::dump_full_tensor(*paddingMat, 12, "D.txt");
 
   std::cout << "Projecting force onto W^3... ";
   tic();
@@ -188,22 +197,24 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
   std::cout << "Done.\n";
 
   std::cout << "Assembling bilinear form... ";
-  NonlinearKirchhoff::Form_dkt a(W3, W3);
-  NonlinearKirchhoff::Form_p22 p22(T3, T3);
+  NLK::Form_dkt a(W3, W3);
+  NLK::Form_p26 p26(T3, T3);
   tic();
-  assembler.assemble(*A, a, p22);
+  assembler.assemble(*A, a, p26);
   auto Ao = A->copy();   // Store copy to compute the RHS later,
   *A *= 1 + alpha*tau;   // because we transform A here
+  bc.apply(*A);
   table("Assembly", "time") = toc();
-  dump_full_tensor(*A, 12, "A.txt");
+  NLK::dump_full_tensor(*A, 12, "A.txt");
   std::cout << "Done.\n";
-
+  
   // This requires that the nonzeros for the blocks be already set up
   BlockMatrixAdapter Mk(block_Mk); 
-  Mk.read(0,0);  // Read in A, we read the rest in the loop
-  
+  Mk.read(0,0);  // Read in A and padding, we read the rest in the loop
+  Mk.read(1,1);
+
   std::cout << "Assembling force vector... ";
-  NonlinearKirchhoff::Form_force l(W3);
+  NLK::Form_force l(W3);
   Vector L;
   tic();
   l.f = f;
@@ -213,12 +224,11 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
 
 
   // Setup system solution at step k: The first block is the update
-  // for the deformation y_{k+1}, the second is ignored (its just 7
-  // entries so it shouldn't hurt performance anyway)
+  // for the deformation y_{k+1}, the second is ignored.
   auto dtY = std::make_shared<Vector>();
   auto ignored = std::make_shared<Vector>();
   A->init_vector(*dtY, 0);
-  zeroMat->init_vector(*ignored, 0);
+  paddingMat->init_vector(*ignored, 0);
   auto block_dtY_L = std::make_shared<BlockVector>(2);
   block_dtY_L->set_block(0, dtY);
   block_dtY_L->set_block(1, ignored);
@@ -238,7 +248,7 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
 
   BlockVectorAdapter Fk(block_Fk);
 
-  bool stop = false;
+  bool stop = false;  // TODO
   int step = 0;
   table("RHS computation", "time") = 0;
   table("Solution", "time") = 0;
@@ -247,24 +257,26 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
     std::cout << "Computing RHS... ";
     tic();
     // This isn't exactly elegant...
-    A->mult(*(y.vector()), *top_Fk);
+    Ao->mult(*(y.vector()), *top_Fk);  // Careful! use the copy Ao
     *top_Fk -= L;
     *top_Fk *= -tau;
+    bc.apply(*top_Fk);
     Fk.read(0);
     table("RHS computation", "time") =
       table.get_value("RHS computation", "time") + toc();
     std::cout << "Done.\n";
-    dump_full_tensor(Fk.get(), 12, "Fk.txt");
+    NLK::dump_full_tensor(Fk.get(), 12, "Fk.txt");
     
     std::cout << "Updating discrete isometry constraint... ";
     tic();
-    B.update_with(y);
+    Bk.update_with(y);
     Mk.read(0,1);  // This is *extremely* inefficient. At least I
     Mk.read(1,0);  // could update B in place inside Mk.
     table("Constraint updates", "time") =
       table.get_value("Constraint updates", "time") + toc();
     std::cout << "Done.\n";
-
+    NLK::dump_full_tensor(*(Bk.get()), 12, "Bk.txt");
+    
     std::cout << "Solving... ";
     tic();
     solver.solve(Mk.get(), dtY_L.get(), Fk.get());
@@ -272,16 +284,16 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
     table("Solution", "time") =
       table.get_value("Solution", "time") + toc();
     std::cout << "Done.\n";
-    dump_full_tensor(dtY_L.get(), 12, "dtY_L.txt");
-    // dump_full_tensor(dtY_L.get(), 12, "Update", false);
+    NLK::dump_full_tensor(dtY_L.get(), 12, "dtY_L.txt");
+    // NLK::dump_full_tensor(dtY_L.get(), 12, "Update", false);
     
     y.vector()->axpy(-tau, *dtY);  // y = y - tau*dty
     
-    dump_full_tensor(*(y.vector()), 12, "yk.txt");
-    // dump_full_tensor(*(y.vector()), 12, "Solution", false);
+    NLK::dump_full_tensor(*(y.vector()), 12, "yk.txt");
+    // NLK::dump_full_tensor(*(y.vector()), 12, "Solution", false);
   }
   
-  dump_full_tensor(Mk.get(), 12, "Mk.txt");
+  NLK::dump_full_tensor(Mk.get(), 12, "Mk.txt");
   
   // info(table);  // outputs "<Table of size 5 x 1>"
   std::cout << table.str(true) << std::endl;
@@ -290,22 +302,20 @@ dostuff(std::shared_ptr<RectangleMesh> mesh, double alpha, double tau,
   File file("solution.pvd");
   file << y;
   
-  return 1;
+  return 0;   // mpirun expects 0 for success
 }
 
 
 void
 test_dofs(std::shared_ptr<RectangleMesh> mesh)
 {
-  auto W3 = std::make_shared<NonlinearKirchhoff::
-                             Form_dkt_FunctionSpace_0>(mesh);
-  auto T3 = std::make_shared<NonlinearKirchhoff::
-                             Form_p22_FunctionSpace_0>(mesh);
+  auto W3 = std::make_shared<NLK::Form_dkt_FunctionSpace_0>(mesh);
+  auto T3 = std::make_shared<NLK::Form_p26_FunctionSpace_0>(mesh);
 
   auto y0 = project_dkt(std::make_shared<Constant>(1.0, 2.0, 3.0),
                         W3);
 
-  dump_full_tensor(*(y0->vector()), 2, "y0", false);
+  NLK::dump_full_tensor(*(y0->vector()), 2, "y0", false);
 
   for (CellIterator cell(*mesh); !cell.end(); ++cell)
   {
@@ -315,7 +325,6 @@ test_dofs(std::shared_ptr<RectangleMesh> mesh)
       std::cout << dofs[i] << ", ";
     std::cout << dofs[dofs.size()-1] << std::endl;
   }
-  
 }
 
 int
@@ -327,14 +336,14 @@ main(int argc, char** argv)
   double tau = 1e-6;
   int max_steps = 24;
   double eps = 1e-6;  // TODO: unused
-  int verbose = 0;    // TODO: unused
+  int pause = 0;
   std::string diagonal = "right";
 
   bool help = false;
   sweet::Options opt(argc, const_cast<char**>(argv),
                      "Nonlinear Kirchhoff model on the unit square.");
   opt.get("-h", "--help", "Show this help", help);
-  opt.get("-v", "--verbose", "Verbosity level, 0-3 (TODO)", verbose);
+  opt.get("-v", "--verbose", "Debug verbosity level, 0-2", NLK::DEBUG);
   opt.get("-m", "--num_vertical", "number of vertical subdivisions", m);
   opt.get("-n", "--num_horizontal", "number of horizontal subdivisions", n);
   opt.get("-d", "--diagonal", "Direction of diagonals: \"left\", \"right\", \"left/right\", \"crossed\"", diagonal);
@@ -342,16 +351,50 @@ main(int argc, char** argv)
   opt.get("-t", "--tau", "timestep *scaling*", tau);
   opt.get("-x", "--max_steps", "Maximum number of time steps", max_steps);
   opt.get("-e", "--eps_stop", "Stopping threshold (TODO)", eps);
+  opt.get("-p", "--pause", "Pause each worker for so many seconds before starting, in order to attach a debugger", pause);
   if (opt.help_requested())
     return 1;
-
+  
   auto mesh = std::make_shared<RectangleMesh>(MPI_COMM_WORLD,
-                                              Point (0.0, 0.0), Point (1.0, 1.0),
+                                              Point (LEFT, BOTTOM), Point (RIGHT, TOP),
                                               m, n, diagonal);
   
   // In the paper the triangulation consists of halved squares
   // and tau is the length of the sides i.e. hmin() in our case.
   tau *= mesh->hmin();
+
+
+  /// A trick from the MPI FAQ
+  /// (https://www.open-mpi.org/faq/?category=debugging)
+  //
+  // This code will output a line to stdout outputting the name of the
+  // host where the process is running and the PID to attach to. It
+  // will then spin on the sleep() function forever waiting for you to
+  // attach with a debugger. Using sleep() as the inside of the loop
+  // means that the processor won't be pegged at 100% while waiting
+  // for you to attach.  Once you attach with a debugger, go up the
+  // function stack until you are in this block of code (you'll likely
+  // attach during the sleep()) then set the variable pause to a nonzero
+  // value. With GDB, the syntax is: (gdb) set var pause = 0. Then set a
+  // breakpoint after your block of code and continue execution until
+  // the breakpoint is hit. Now you have control of your live MPI
+  // application and use the full functionality of the debugger.  You
+  // can even add conditionals to only allow this "pause" in the
+  // application for specific MPI processes (e.g., MPI_COMM_WORLD rank
+  // 0, or whatever process is misbehaving).
+  
+  {
+    int world_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    char processor_name[MPI_MAX_PROCESSOR_NAME];
+    int name_len;
+    MPI_Get_processor_name(processor_name, &name_len);
+    std::cout << "PID " << getpid() << " on " << processor_name
+              << " (rank " << world_rank << ") ready for attach\n" << std::flush;
+    while (pause > 0)
+        sleep(pause);
+  }
   
   return dostuff(mesh, alpha, tau, max_steps);
 }
+

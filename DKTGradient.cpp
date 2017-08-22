@@ -131,13 +131,13 @@ DKTGradient::update(const std::vector<double>& cc)
 /// Returns local coefficients in $ P_2^2 $
 void
 DKTGradient::apply_vec(std::vector<double>& p3coeffs,
-                       std::array<double, 12>& p22coeffs)
+                       std::array<double, 12>& p26coeffs)
 {
   if(_dim != 1)
     throw "DKTGradient::apply_vec() only implemented for scalar spaces.";
 
   Eigen::Map<const Eigen::Matrix<double, 9, 1>> arg(p3coeffs.data());
-  Eigen::Map<Eigen::Matrix<double, 12, 1>> dest(p22coeffs.data());
+  Eigen::Map<Eigen::Matrix<double, 12, 1>> dest(p26coeffs.data());
   dest = _M * arg;
 }
 
@@ -148,16 +148,16 @@ DKTGradient::apply_vec(std::vector<double>& p3coeffs,
 ///    
 ///   D is stored in dkttensor
 void
-DKTGradient::apply(const double* p22tensor, P3Tensor& dkttensor)
+DKTGradient::apply(const double* p26tensor, P3Tensor& dkttensor)
 {
   Eigen::Map<const Eigen::Matrix<double, 12, 12, Eigen::RowMajor>,
-             0, Eigen::OuterStride<>> p22(p22tensor,
+             0, Eigen::OuterStride<>> p26(p26tensor,
                                           Eigen::OuterStride<>(_dim*12));
   Eigen::Map<Eigen::Matrix<double, 9, 9, Eigen::RowMajor>>
     dkt(dkttensor.data());
 
-  // Eigen::Matrix<double, 12, 12, Eigen::RowMajor> tmp(p22);
+  // Eigen::Matrix<double, 12, 12, Eigen::RowMajor> tmp(p26);
   // dolfin::dump_raw_matrix(tmp.data(), 12, 12, "DKT", false);
 
-  dkt = _Mt * p22 * _M;
+  dkt = _Mt * p26 * _M;
 }

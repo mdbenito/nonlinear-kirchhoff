@@ -34,12 +34,12 @@ public:
   typedef Eigen::Matrix<double, 12, 9, Eigen::RowMajor> M_t;
   typedef Eigen::Matrix<double, 9, 12, Eigen::RowMajor> Mt_t;
   typedef std::array<double, 9*9> P3Tensor;
-  typedef std::array<double, 12*12> P22Tensor;
-  typedef std::array<double, 12> P22Vector;
+  typedef std::array<double, 12*12> P26Tensor;
+  typedef std::array<double, 12> P26Vector;
 
 
   /// Initialise the local cell gradient matrix.
-  /// (interpolates a scalar function from P_2^2 into DKT)
+  /// (interpolates a scalar function from P_2^6 into DKT)
   ///
   /// dim is the number of subspaces this will operate on (only
   /// partially supported with a hack for block diagonal matrices, see
@@ -51,16 +51,16 @@ public:
   void update(const std::vector<double>& cc);
   
   /// Compute $ M v $ for $ v \in P_3^{red} $
-  /// Returns local coefficients in $ P_2^2 $
+  /// Returns local coefficients in $ P_2^6 $
   /// Only works if _dim == 1
-  void apply_vec(std::vector<double>& p3coeffs, P22Vector& p22coeffs);
+  void apply_vec(std::vector<double>& p3coeffs, P26Vector& p26coeffs);
   
   /// Compute D = M^T A M where
-  ///  A is the local tensor for (\nabla u, \nabla v) in a $ P_2^2 $ element
+  ///  A is the local tensor for (\nabla u, \nabla v) in a $ P_2^6 $ element
   ///  D is the local tensor for (\nabla \nabla_h u, \nabla \nabla_h v)
-  /// Works for dim > 1 ASSUMING that p22tensor is just a 12x12 chunk of the
+  /// Works for dim > 1 ASSUMING that p26tensor is just a 12x12 chunk of the
   /// actual matrix (better for KirchhoffAssembler)
-  void apply(const double* p22tensor, P3Tensor& D);
+  void apply(const double* p26tensor, P3Tensor& D);
   
 protected:
   M_t   _M;  // gradient matrix
