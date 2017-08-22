@@ -14,8 +14,10 @@ namespace dolfin {
   class TensorLayout;
 
   /// IsometryConstraint implements the discrete isometry constraint
-  /// and Dirichlet boundary conditions for the gradient flow. See the
-  /// paper for more info.
+  /// for the gradient flow. Homogeneous Dirichlet boundary conditions
+  /// are enforced on the gradient flow updates through the main
+  /// system matrix, thus ensuring that the BCs fulfilled by the
+  /// initial data are kept. See the paper for more info.
   class IsometryConstraint
   {
     /// Vertex id to global dof numbers. Keep in mind the offsets due
@@ -50,10 +52,10 @@ namespace dolfin {
     /// non-const Matrix so we cannot const it here
     std::shared_ptr<Matrix> get_transposed() { return _Bt; }
 
-    /// Return an empty matrix of the size required to complete the
+    /// Return an identity matrix of the size required to complete the
     /// full system matrix after appending B and Bt. This is just a
     /// convenience function which cleans up a bit the main program.
-    static std::shared_ptr<GenericMatrix> get_zero_padding();
+    std::shared_ptr<GenericMatrix> get_padding();
   };
 }
 
