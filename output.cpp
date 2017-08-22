@@ -6,13 +6,18 @@
 
 #include "output.h"
 
-#ifndef DISABLE_DUMP
-namespace dolfin {
+namespace NLK {
 
+  using namespace dolfin;
+  int DEBUG = 0;
+  
   void
   dump_full_tensor(const GenericMatrix& A, int precision,
                    const std::string& name, bool asfile)
   {
+    if (DEBUG < 2)
+      return;
+    
     auto num_rows = A.size(0);
     auto num_cols = A.size(1);
 
@@ -47,6 +52,9 @@ namespace dolfin {
   dump_full_tensor(const GenericVector& A, int precision,
                    const std::string& name, bool asfile)
   {
+    if (DEBUG < 2)
+      return;
+    
     auto num_entries = A.size(0);
 
     std::vector<double> block(num_entries);
@@ -71,6 +79,9 @@ namespace dolfin {
   void dump_raw_matrix(const double* A, int m, int n, int precision,
                        const std::string& name, bool asfile)
   {
+    if (DEBUG < 2)
+      return;
+    
     std::ostream* out = &std::cout;
     std::ofstream fs;
     if (name.size() > 0 && asfile)
@@ -92,7 +103,9 @@ namespace dolfin {
   dump_raw_matrix(const std::vector<double>& A, int m, int n, int precision,
                   const std::string& name, bool asfile)
   {
+    if (DEBUG < 2)
+      return;
+
     dump_raw_matrix(A.data(), m, n, precision, name, asfile);
   }
 }
-#endif  // ifndef DISABLE_DUMP
