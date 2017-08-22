@@ -55,10 +55,9 @@ namespace sweet {
     typedef std::unordered_multimap<std::string,size_t>	MapType;
     typedef MapType::iterator                          IterType;
     typedef std::vector<Option>                            Opts;
-
   public:
     Options(int c, char** v, const std::string& desc = "") :
-      description(desc) {
+      description(desc), errors(false) {
       for(int i = 0; i < c; ++i) {
         argv.push_back(v[i]);
         mapping.insert(std::make_pair(std::string(v[i]), argv.size()-1));
@@ -75,19 +74,21 @@ namespace sweet {
       auto lit = mapping.equal_range(l);
       if(std::distance(sit.first, sit.second) >= cnt && 
          std::distance(lit.first, lit.second) >= cnt) {
-        throw std::logic_error(std::string(
-                                           "Single option found by both short and long optionname: ") + s +
-                               std::string(" and ") + l);
+        throw std::logic_error
+          (std::string
+           ("Single option found by both short and long optionname: ")
+           + s + std::string(" and ") + l);
       } else if(std::distance(sit.first, sit.second) > cnt) {
-        throw std::logic_error(std::string(
-                                           "Single option found by multiple time by short optionname: ") 
-                               + s);
+        throw std::logic_error
+          (std::string
+           ("Single option found multiple times by short optionname: ")
+           + s);
       } else if(std::distance(lit.first, lit.second) > cnt) {
-        throw std::logic_error(std::string(
-                                           "Single option found by multiple time by long optionname: ") 
-                               + l);
+        throw std::logic_error
+          (std::string
+           ("Single option found by multiple times by long optionname: ")
+           + l);
       }
-
       return std::make_pair(sit,lit);
     }
 
@@ -132,9 +133,10 @@ namespace sweet {
       auto sit = mapping.equal_range("-h");
       auto lit = mapping.equal_range("--help");
 
-      // --help or -h not set
-      if(sit.first == sit.second && lit.first == lit.second) {
-        return false;
+      if(!errors) {
+        // --help or -h not set
+        if (sit.first == sit.second && lit.first == lit.second)
+          return false;
       }
 
       if(description != "") {
@@ -158,6 +160,7 @@ namespace sweet {
 
   private:
     const std::string description;
+    bool errors; // TODO, no easy way with current impl. to detect errors
     Opts opts;
     std::set<int> used;
     std::vector<std::string> argv;
