@@ -27,8 +27,8 @@
 
 using namespace dolfin;
 
-/* Remember that a is a Form in a FunctionSpace<DKT> and p2form is a
- * form in a TensorFunctionSpace<P2> with shape (3,2)
+/* Remember that a is a Form in a VectorFunctionSpace<DKT> and p2form
+ * is a form in a TensorFunctionSpace<P2> with shape (3,2)
  */
 void
 KirchhoffAssembler::assemble(GenericMatrix& A,
