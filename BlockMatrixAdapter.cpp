@@ -185,9 +185,9 @@ BlockMatrixAdapter::assemble()
 
   ierr = MatCreate(MPI_COMM_WORLD, &mat);
   TEST_PETSC_ERROR(ierr, "MatCreate");
-  ierr = MatSetType(mat, MATAIJ);
+  ierr = MatSetType(mat, MATMPIAIJ);
   TEST_PETSC_ERROR(ierr, "MatSetType");
-  ierr = MatSetSizes(mat, _nrows, _ncols, _nrows, _ncols); // PETSC_DECIDE, PETSC_DECIDE, _nrows, _ncols);
+  ierr = MatSetSizes(mat, PETSC_DECIDE, PETSC_DECIDE, _nrows, _ncols);
   TEST_PETSC_ERROR(ierr, "MatSetSizes");
 
   // // HACK, TEST
@@ -196,10 +196,11 @@ BlockMatrixAdapter::assemble()
   // MatGetSize(mat, &gm, &gn);
   // assert(lm == gm);
   // assert(ln == gn);
-  
+
   // This copies the index data (which is ok, we seldom call rebuild())
   // TODO: I could use the data from the matrices right away if available...
-  // FIXME!! I'm using local indices as global and viceversa ALL OVER THE PLACE
+  // FIXME!! I'm using local indices as global and viceversa
+  //         ALL OVER THE PLACE
   ierr = MatMPIAIJSetPreallocationCSR(mat, row_indices_in_col_indices.data(),
                                       col_indices.data(), NULL);
   TEST_PETSC_ERROR(ierr,"MatMPIAIJSetPreallocationCSR");
@@ -212,8 +213,11 @@ BlockMatrixAdapter::assemble()
   TEST_PETSC_ERROR(ierr,"MatAssemblyEnd");
 
   std::cout << " done.\n";
-
-  // FIXME: I should ensure that there are no references left around
+  // const char* type = new char[100];  // YUK!!!
+  // MatGetType(mat, &type);
+  // std::cout << "     Allocated matrix of type " << type << "\n";
+  // delete type;
+  // FIXME: I should make sure that there are no references left around
   _A = std::make_shared<PETScMatrix>(mat);
 }
 
