@@ -62,12 +62,12 @@ class BoundaryData : public Expression
 };
 
 
-/// Projects a GenericFunction, which should be in a P^3x2 space onto
+///  Projects a GenericFunction, which should be in a P^3x2 space onto
 /// the given FunctionSpace, which should be DKT.  In order for this
 /// to be general, I'd need to prepare a variational problem here and
 /// compile it on the fly with ffc, etc. instead of "hardcoding" stuff
-/// in the UFL file.  // One should be returning unique_ptr, remember
-/// your Gurus of the week...  //
+/// in the UFL file.  One should be returning unique_ptr, remember
+/// your Gurus of the week... 
 /// https://herbsutter.com/2013/05/30/gotw-90-solution-factories/
 std::unique_ptr<Function>
 project_dkt(std::shared_ptr<const GenericFunction> what,
@@ -81,11 +81,8 @@ project_dkt(std::shared_ptr<const GenericFunction> what,
   NLK::Form_project_rhs project_rhs(where);
   std::unique_ptr<Function> f(new Function(where));
   project_rhs.g = what;  // g is a Coefficient in a P3 space (see .ufl)
-  // std::cout << "    coefficient set." << "\n";
   assemble_system(Ap, bp, project_lhs, project_rhs, {});
-  // std::cout << "    system assembled." << "\n";
   solver.solve(Ap, *(f->vector()), bp);
-  // std::cout << "    system solved." << "\n";
   return f;
 }
 
@@ -108,6 +105,27 @@ round_zeros(GenericVector& v, double precision=1e-6)
                      return (std::abs(v)< 1e-8) ? 0.0 : v;
                    });
     v.set_local(block.data(), numrows, rows.data());
+}
+
+void
+test_dofs(std::shared_ptr<RectangleMesh> mesh)
+{
+  auto W3 = std::make_shared<NLK::Form_dkt_FunctionSpace_0>(mesh);
+  auto T3 = std::make_shared<NLK::Form_p26_FunctionSpace_0>(mesh);
+
+  auto y0 = project_dkt(std::make_shared<Constant>(1.0, 2.0, 3.0),
+                        W3);
+
+  NLK::dump_full_tensor(*(y0->vector()), 2, "y0", false);
+
+  for (CellIterator cell(*mesh); !cell.end(); ++cell)
+  {
+    auto dofs = W3->dofmap()->cell_dofs(cell->index());
+    std::cout << "Cell: " << cell->index() << ", DOFs: ";
+    for (int i = 0; i < dofs.size()-1; ++i)
+      std::cout << dofs[i] << ", ";
+    std::cout << dofs[dofs.size()-1] << std::endl;
+  }
 }
 
 
@@ -146,7 +164,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
                            W3)));
   DirichletBC bc(W3, zero, bdry);
 
-  Table table("Assembly and application of BCs");
+  Table table("Compute times");
 
   std::cout << "Projecting initial data onto W^3... ";
   tic();
@@ -156,9 +174,13 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
   std::cout << "Done.\n";
   
   auto& v = *(y0->vector());
-  round_zeros(v);
+  round_zeros(v);  // This modifies y0
   NLK::dump_full_tensor(v, 4, "y0.txt");
-  
+
+  ////////////////////////////////////////////////////////////////////
+  // Assembly of system matrix
+
+  /// Top right and lower left blocks
   std::cout << "Initialising constraint... ";
   IsometryConstraint Bk(*W3);
   std::cout << "Done.\n";
@@ -169,33 +191,8 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
   table("Constraint updates", "time") = toc();
   std::cout << "Done.\n";
 
-  // NLK::dump_full_tensor(*Bk.get(), 12, "B0.txt");
-
-  // Upper left block in the full matrix (constant)
+  /// Upper left block (constant)
   auto A = std::make_shared<Matrix>();
-
-  // Lower right block:
-  auto paddingMat = Bk.get_padding();
-  auto zeroVec = std::make_shared<Vector>();
-  // second arg is dim, meaning *zeroVec can hold a product Ax for
-  // some x
-  paddingMat->init_vector(*zeroVec, 0);
-
-  auto block_Mk = std::make_shared<BlockMatrix>(2, 2);
-  block_Mk->set_block(0, 0, A);
-  block_Mk->set_block(1, 0, Bk.get());
-  block_Mk->set_block(0, 1, Bk.get_transposed());
-  block_Mk->set_block(1, 1, paddingMat);
-  NLK::dump_full_tensor(*paddingMat, 12, "D.txt");
-
-  std::cout << "Projecting force onto W^3... ";
-  tic();
-  auto force = std::make_shared<Force>();
-  auto f = std::shared_ptr<const Function>(std::move(project_dkt(force,
-                                                                 W3)));
-  table("Projection of f", "time") = toc();
-  std::cout << "Done.\n";
-
   std::cout << "Assembling bilinear form... ";
   NLK::Form_dkt a(W3, W3);
   NLK::Form_p26 p26(T3, T3);
@@ -207,11 +204,35 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
   table("Assembly", "time") = toc();
   NLK::dump_full_tensor(*A, 12, "A.txt");
   std::cout << "Done.\n";
+
+  /// Lower right block
+  auto paddingMat = Bk.get_padding();
+  NLK::dump_full_tensor(*paddingMat, 12, "D.txt");
   
+  auto block_Mk = std::make_shared<BlockMatrix>(2, 2);
+  block_Mk->set_block(0, 0, A);
+  block_Mk->set_block(1, 0, Bk.get());
+  block_Mk->set_block(0, 1, Bk.get_transposed());
+  block_Mk->set_block(1, 1, paddingMat);
   // This requires that the nonzeros for the blocks be already set up
   BlockMatrixAdapter Mk(block_Mk); 
-  Mk.read(0,0);  // Read in A and padding, we read the rest in the loop
-  Mk.read(1,1);
+  Mk.read(0,0);  // Read in A ...
+  Mk.read(1,1);  // and padding, we read the rest in the loop
+
+  ////////////////////////////////////////////////////////////////////
+  // Assembly / setup of RHS
+  
+  auto zeroVec = std::make_shared<Vector>();
+  // *zeroVec can hold a product Ax for some x
+  paddingMat->init_vector(*zeroVec, 0);
+
+  std::cout << "Projecting force onto W^3... ";
+  tic();
+  auto force = std::make_shared<Force>();
+  auto f = std::shared_ptr<const Function>(std::move(project_dkt(force,
+                                                                 W3)));
+  table("Projection of f", "time") = toc();
+  std::cout << "Done.\n";
 
   std::cout << "Assembling force vector... ";
   NLK::Form_force l(W3);
@@ -222,9 +243,22 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
   table("Assembly", "time") = toc();
   std::cout << "Done.\n";
 
+  // The content of the first block is set in the loop using the
+  // assembled force vector and the copy Ao of the stiffness matrix.
+  // The second is always zero.
+  auto block_Fk = std::make_shared<BlockVector>(2);
+  auto top_Fk = std::make_shared<Vector>();
+  A->init_vector(*top_Fk, 0); //  *top_Fk = Ax for some x
+  block_Fk->set_block(0, top_Fk);
+  block_Fk->set_block(1, zeroVec);
 
-  // Setup system solution at step k: The first block is the update
-  // for the deformation y_{k+1}, the second is ignored.
+  BlockVectorAdapter Fk(block_Fk);
+
+  ////////////////////////////////////////////////////////////////////
+  // Setup system solution at step k
+  
+  // The first block is the update for the deformation y_{k+1},
+  // the second is ignored.
   auto dtY = std::make_shared<Vector>();
   auto ignored = std::make_shared<Vector>();
   A->init_vector(*dtY, 0);
@@ -237,17 +271,9 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
   
   Function y(*y0);  // Deformation y_{k+1}, begin with initial condition
 
-  // Setup right hand side at step k. The content of the first block
-  // is set in the loop, the second is always zero
-  auto block_Fk = std::make_shared<BlockVector>(2);
-  auto top_Fk = std::make_shared<Vector>();
-  // second arg is dim, meaning *top_Fk = Ax for some x
-  A->init_vector(*top_Fk, 0);
-  block_Fk->set_block(0, top_Fk);
-  block_Fk->set_block(1, zeroVec);
-
-  BlockVectorAdapter Fk(block_Fk);
-
+  ////////////////////////////////////////////////////////////////////
+  // Main loop
+  
   bool stop = false;  // TODO
   int step = 0;
   table("RHS computation", "time") = 0;
@@ -285,12 +311,10 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
       table.get_value("Solution", "time") + toc();
     std::cout << "Done.\n";
     NLK::dump_full_tensor(dtY_L.get(), 12, "dtY_L.txt");
-    // NLK::dump_full_tensor(dtY_L.get(), 12, "Update", false);
     
     y.vector()->axpy(-tau, *dtY);  // y = y - tau*dty
     
     NLK::dump_full_tensor(*(y.vector()), 12, "yk.txt");
-    // NLK::dump_full_tensor(*(y.vector()), 12, "Solution", false);
   }
   
   NLK::dump_full_tensor(Mk.get(), 12, "Mk.txt");
@@ -303,28 +327,6 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
   file << y;
   
   return 0;   // mpirun expects 0 for success
-}
-
-
-void
-test_dofs(std::shared_ptr<RectangleMesh> mesh)
-{
-  auto W3 = std::make_shared<NLK::Form_dkt_FunctionSpace_0>(mesh);
-  auto T3 = std::make_shared<NLK::Form_p26_FunctionSpace_0>(mesh);
-
-  auto y0 = project_dkt(std::make_shared<Constant>(1.0, 2.0, 3.0),
-                        W3);
-
-  NLK::dump_full_tensor(*(y0->vector()), 2, "y0", false);
-
-  for (CellIterator cell(*mesh); !cell.end(); ++cell)
-  {
-    auto dofs = W3->dofmap()->cell_dofs(cell->index());
-    std::cout << "Cell: " << cell->index() << ", DOFs: ";
-    for (int i = 0; i < dofs.size()-1; ++i)
-      std::cout << dofs[i] << ", ";
-    std::cout << dofs[dofs.size()-1] << std::endl;
-  }
 }
 
 int
