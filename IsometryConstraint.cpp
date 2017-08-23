@@ -6,6 +6,9 @@
 
 namespace dolfin {
 
+#define TEST_PETSC_ERROR(__ierr, __funname)                             \
+  if (__ierr != 0) PETScObject::petsc_error(__ierr, __FILE__, __funname);
+
   IsometryConstraint::IsometryConstraint(const FunctionSpace& W)
     : _v2d(vertex_to_dof_map(W)),
       _B(std::make_shared<Matrix>()), _Bt(std::make_shared<Matrix>())
@@ -220,19 +223,32 @@ namespace dolfin {
   {
     // HACK: I really don't know how to create an empty n x n
     // dolfin::Matrix, so I use PETSc... duh
-    Mat tmp;
+    Mat mat;
+    PetscErrorCode ierr;
     int N = _B->size(0);
-    MatCreateAIJ(MPI_COMM_WORLD, PETSC_DECIDE, PETSC_DECIDE, N, N,
-                 0, NULL, 0, NULL, &tmp);
-    MatSetUp(tmp);
-    MatAssemblyBegin(tmp, MAT_FINAL_ASSEMBLY);
-    MatAssemblyEnd(tmp, MAT_FINAL_ASSEMBLY);
-    // HACK! This might be slow (not sure if 1 nonzero is preallocated)
-    // See MatShift's doc
-    // Also, careful to shift after assembly or it won't have any effect
-    MatShift(tmp, 1.0);
-    
-    return std::make_shared<PETScMatrix>(tmp);
+    ierr = MatCreate(MPI_COMM_WORLD, &mat);
+    TEST_PETSC_ERROR(ierr, "MatCreate");
+    // MATAIJ fails to pick MPIAIJ in parallel (??)
+    ierr = MatSetType(mat, MATMPIAIJ);
+    TEST_PETSC_ERROR(ierr, "MatSetType");
+    ierr = MatSetSizes(mat, PETSC_DECIDE, PETSC_DECIDE, N, N);
+    TEST_PETSC_ERROR(ierr, "MatSetSizes");
+    ierr = MatMPIAIJSetPreallocation(mat, 1, NULL, 0, NULL);
+    TEST_PETSC_ERROR(ierr, "MatMPIAIJSetPreallocation");
+    ierr = MatSeqAIJSetPreallocation(mat, 1, NULL);
+    TEST_PETSC_ERROR(ierr, "MatSeqAIJSetPreallocation");
+    // MatSetUp(mat);
+    MatAssemblyBegin(mat, MAT_FINAL_ASSEMBLY);
+    MatAssemblyEnd(mat, MAT_FINAL_ASSEMBLY);
+    // Careful to shift after assembly or it won't have any effect
+    MatShift(mat, 1.0);
+
+    PetscInt lm, ln, gm, gn;
+    MatGetLocalSize(mat, &lm, &ln);
+    MatGetSize(mat, &gm, &gn);
+    std::cout << "Padding has local size " << lm << " x " << ln
+              << " and global size " << gm << " x " << gn << "\n";
+    return std::make_shared<PETScMatrix>(mat);
   }
 
 }
