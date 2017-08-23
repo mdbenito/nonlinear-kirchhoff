@@ -75,7 +75,7 @@ project_dkt(std::shared_ptr<const GenericFunction> what,
 {
   Matrix Ap;
   Vector bp;
-  LUSolver solver;
+  LUSolver solver("mumps");
   
   NLK::Form_project_lhs project_lhs(where, where);
   NLK::Form_project_rhs project_rhs(where);
@@ -144,7 +144,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
 {
   KirchhoffAssembler assembler;
   Assembler rhs_assembler;
-  PETScLUSolver solver;
+  PETScLUSolver solver("mumps");
 
   auto W3 = std::make_shared<NLK::Form_dkt_FunctionSpace_0>(mesh);
   auto T3 = std::make_shared<NLK::Form_p26_FunctionSpace_0>(mesh);
