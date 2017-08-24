@@ -4,19 +4,18 @@ This is a C++ implementation in [FEniCS](www.fenicsproject.org) of the
 nonlinear Kirchhoff model using a non-conforming implementation with
 Discrete Kirchhoff Triangles as described in [1].
 
+
+
 ## To do
 
-For now this is little more than a stub. The **plan** is:
+1. Parallel operation across all classes. Check `IsometryConstraint`,
+   `KirchhoffAssembler` and `DKTGradient` in particular.
+2. Stopping condition: $||\nabla \theta (d_t y^{n+1}_h) || < \epsilon $
+3. Implement a check on the validity of the boundary conditions for
+   the initial deformation of the gradient flow.
 
-1. Finish `IsometryConstraint`.  I should try and make this
-   parallelizable and be careful with the initialisation of the
-   sparsity pattern. Use DiscreteOperators.h in the dolfin sources for
-   a guide.
-1. Hack together the gradient flow and solution.
-1. Improve the hackish implementation of `DKTGradient`. In particular
-   ensure parallel operation is possible.
-1. Improve the hackish implementation of `KirchhoffAssembler`. In
-   particular ensure parallel operation is possible.
+Remember to check `DiscreteOperators.h` in the dolfin sources for some
+ideas.
 
 ## Dependencies
 
@@ -26,7 +25,6 @@ amounts to:
 
 * The base fenics-dev image.
 * My implementations of Hermite and DKT elements for FIAT and FFC.
-
 
 ## License
 

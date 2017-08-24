@@ -356,7 +356,8 @@ main(int argc, char** argv)
     return 1;
   
   auto mesh = std::make_shared<RectangleMesh>(MPI_COMM_WORLD,
-                                              Point (LEFT, BOTTOM), Point (RIGHT, TOP),
+                                              Point (LEFT, BOTTOM),
+                                              Point (RIGHT, TOP),
                                               m, n, diagonal);
   
   // In the paper the triangulation consists of halved squares

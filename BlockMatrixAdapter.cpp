@@ -185,6 +185,7 @@ BlockMatrixAdapter::assemble()
 
   ierr = MatCreate(MPI_COMM_WORLD, &mat);
   TEST_PETSC_ERROR(ierr, "MatCreate");
+  // MATAIJ fails to pick MPIAIJ in parallel
   ierr = MatSetType(mat, MATMPIAIJ);
   TEST_PETSC_ERROR(ierr, "MatSetType");
   ierr = MatSetSizes(mat, PETSC_DECIDE, PETSC_DECIDE, _nrows, _ncols);
