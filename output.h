@@ -3,6 +3,7 @@
 
 #include <string>
 #include <iostream>
+#include <sstream>
 
 namespace dolfin {
   class GenericMatrix;
@@ -29,6 +30,17 @@ namespace NLK {
   void dump_raw_matrix(const std::vector<double>& A, int m, int n,
                        int precision=14,
                        const std::string& name="", bool asfile=true);
+
+  /*! Serializes std containers to strings.
+   * Requires available conversion to string for the contained type. */
+  template<typename T>
+  std::string v2s(const T& v)
+  {
+    std::stringstream ss;
+    for (const auto& x: v)
+      ss << x << " ";
+    return ss.str();
+  }
 }
 
 #endif // __OUTPUT_H
