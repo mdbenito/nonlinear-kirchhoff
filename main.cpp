@@ -276,6 +276,8 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
   int step = 0;
   table("RHS computation", "time") = 0;
   table("Solution", "time") = 0;
+  table("Stopping condition", "time") = 0;
+  DKTGradient grad;
   while (! stop && ++step <= max_steps) {
     std::cout << "\n## Step " << step << " ##\n\n";
     std::cout << "Computing RHS... ";
@@ -304,14 +306,24 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
     std::cout << "Solving... ";
     tic();
     solver.solve(Mk.get(), dtY_L.get(), Fk.get());
-    dtY_L.write(0);  // Update block_dtY_L(0,0) back from dty_L
+    dtY_L.write(0);  // Update block_dtY_L(0) back from dty_L, i.e. dtY
     table("Solution", "time") =
       table.get_value("Solution", "time") + toc();
     std::cout << "Done.\n";
     NLK::dump_full_tensor(dtY_L.get(), 12, "dtY_L.txt");
+
+    std::cout << "Testing whether we should stop... ";
+    tic();
+      
+    auto gr = grad.apply_vec(T3, W3, dtY);
+    // std::cout << "Discrete gradient: " << v2s(*(gr->vector())) << "\n";
+    auto nr = norm(*(gr->vector()));
+    std::cout << "Norm of discrete gradient: " << nr << "\n";
+    stop = (nr < 1e-10) && step > 100;
+    table("Stopping condition", "time") =
+      table.get_value("Stopping condition", "time") + toc();
     
     y.vector()->axpy(-tau, *dtY);  // y = y - tau*dty
-    
     NLK::dump_full_tensor(*(y.vector()), 12, "yk.txt");
   }
   

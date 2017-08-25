@@ -44,7 +44,7 @@ testDKT(void)
 
   std::vector<double> cc = {0,0,1,0,1,1};
   DKTGradient::P22Vector p22coeffs;
-  std::vector<double> p3rcoeffs = {1,0,0,0,0,0,0,0,0};
+  DKTGradient::P3Vector p3rcoeffs = {1,0,0,0,0,0,0,0,0};
   dg.update(cc);
   dg.apply_vec(p3rcoeffs, p22coeffs);
 

@@ -6,13 +6,14 @@
 #include "DKTGradient.h"
 #include "output.h"
 
+using namespace dolfin;
+
 DKTGradient::DKTGradient(int dim)
   : _dim(dim)
 {
   // Setting the OuterStride needs testing!
   
-  std::cout << "DKTGradient: WARNING: using range dimension " << _dim << ".\n";
-  /* TODO: I can only fix the ones if they are correctly placed, 
+  /* TODO: I can only fix the ones if they are correctly placed,
    i.e. after removing the permutation_hack() and inserting the values
    of M in the right places...
 
@@ -27,7 +28,7 @@ DKTGradient::DKTGradient(int dim)
 
 /// Updates the operator matrix for the given Cell
 void
-DKTGradient::update(const dolfin::Cell& cell)
+DKTGradient::update(const Cell& cell)
 {
   std::vector<double> cc;         // cell coordinates
   cell.get_vertex_coordinates(cc);
@@ -87,8 +88,10 @@ DKTGradient::update(const std::vector<double>& cc)
     tt[IJ(i,0)] /= ss[i];
     tt[IJ(i,1)] /= ss[i];
     auto m = outer(tt[IJ(i,0)], tt[IJ(i,1)]);
-    TT[IIJ(i,0,0)] = 0.5 - 0.75*m[IJ(0,0)]; TT[IIJ(i,0,1)] =     - 0.75*m[IJ(0,1)];
-    TT[IIJ(i,1,0)] =     - 0.75*m[IJ(1,0)]; TT[IIJ(i,1,1)] = 0.5 - 0.75*m[IJ(1,1)];
+    TT[IIJ(i,0,0)] = 0.5 - 0.75*m[IJ(0,0)];
+    TT[IIJ(i,0,1)] =     - 0.75*m[IJ(0,1)];
+    TT[IIJ(i,1,0)] =     - 0.75*m[IJ(1,0)];
+    TT[IIJ(i,1,1)] = 0.5 - 0.75*m[IJ(1,1)];
     tt[IJ(i,0)] *= -3/(2*ss[i]);
     tt[IJ(i,1)] *= -3/(2*ss[i]);
   }
@@ -103,8 +106,10 @@ DKTGradient::update(const std::vector<double>& cc)
     _M.coeffRef(r+1,c) = -tt[IJ(i,1)];
   };
   auto copyTT = [&](size_t i, size_t r, size_t c) {
-    _M.coeffRef(r,c)   = TT[IIJ(i,0,0)]; _M.coeffRef(r,c+1)   = TT[IIJ(i,0,1)];
-    _M.coeffRef(r+1,c) = TT[IIJ(i,1,0)]; _M.coeffRef(r+1,c+1) = TT[IIJ(i,1,1)];
+    _M.coeffRef(r,c)   = TT[IIJ(i,0,0)];
+    _M.coeffRef(r,c+1)   = TT[IIJ(i,0,1)];
+    _M.coeffRef(r+1,c) = TT[IIJ(i,1,0)];
+    _M.coeffRef(r+1,c+1) = TT[IIJ(i,1,1)];
   };
 
   copytt(0, 6, 3);
@@ -127,37 +132,75 @@ DKTGradient::update(const std::vector<double>& cc)
   _Mt = _M.transpose();
 }
 
-/// Compute $ M v $ for $ v \in P_3^{red} $
-/// Returns local coefficients in $ P_2^2 $
 void
-DKTGradient::apply_vec(std::vector<double>& p3coeffs,
-                       std::array<double, 12>& p26coeffs)
-{
-  if(_dim != 1)
-    throw "DKTGradient::apply_vec() only implemented for scalar spaces.";
-
-  Eigen::Map<const Eigen::Matrix<double, 9, 1>> arg(p3coeffs.data());
-  Eigen::Map<Eigen::Matrix<double, 12, 1>> dest(p26coeffs.data());
-  dest = _M * arg;
-}
-
-/// Compute D = M^T A M.
-///
-///   A is given by p22tensor and should hold 12*12 entries from the
-///   local tensor for (grad u, grad v) in a $ P_2^2 $ element
-///    
-///   D is stored in dkttensor
-void
-DKTGradient::apply(const double* p26tensor, P3Tensor& dkttensor)
+DKTGradient::apply(const double* p22tensor, P3Tensor& dkttensor)
 {
   Eigen::Map<const Eigen::Matrix<double, 12, 12, Eigen::RowMajor>,
-             0, Eigen::OuterStride<>> p26(p26tensor,
+             0, Eigen::OuterStride<>> p22(p22tensor,
                                           Eigen::OuterStride<>(_dim*12));
   Eigen::Map<Eigen::Matrix<double, 9, 9, Eigen::RowMajor>>
     dkt(dkttensor.data());
 
-  // Eigen::Matrix<double, 12, 12, Eigen::RowMajor> tmp(p26);
-  // dolfin::dump_raw_matrix(tmp.data(), 12, 12, "DKT", false);
+  // Eigen::Matrix<double, 12, 12, Eigen::RowMajor> tmp(p22);
+  // dump_raw_matrix(tmp.data(), 12, 12, "DKT", false);
 
-  dkt = _Mt * p26 * _M;
+  dkt = _Mt * p22 * _M;
+}
+
+void
+DKTGradient::apply_vec(const P3Vector& p3coeffs, P22Vector& p22coeffs)
+{
+  Eigen::Map<const Eigen::Matrix<double, 9, 1>> arg(p3coeffs.data());
+  Eigen::Map<Eigen::Matrix<double, 12, 1>> dest(p22coeffs.data());
+  dest = _M * arg;
+}
+
+std::unique_ptr<Function>
+DKTGradient::apply_vec(std::shared_ptr<FunctionSpace> T,   // (P2^2)^3
+                       std::shared_ptr<FunctionSpace> W,   // DKT^3
+                       std::shared_ptr<Vector>& dktvec)
+{
+  std::unique_ptr<Function> fun(new Function(T));
+  auto vec = fun->vector();
+  
+  P22Vector p22coeffs;
+  auto p3coeffs = std::vector<double>(12);
+  auto mesh = W->mesh();
+
+  P3Vector block;
+  
+  for (CellIterator cell(*mesh); !cell.end(); ++cell)
+  {
+    update(*cell);
+    for (int i = 0; i < _dim; ++i) {
+      // std::cout << "\nSubspace " << i << "\n";
+      // 1. extract dofs for cell using W's dofmap
+      auto dmW = W->sub(i)->dofmap().get();
+      auto dofsW = dmW->cell_dofs(cell->index());
+      // std::cout << "Got dofs: " << v2s(dofsW) << "\n";
+      // 1.1 Check ranges for parallel ???
+      // auto range = vec->local_range();
+      // std::cout << "Range: " << range.first << " to "
+      //           << range.second << "\n";
+      // 2. extract local coeffs from dktfun for this cell
+      assert(block.size() == dofsW.size());
+      dktvec->get(block.data(), dofsW.size(), dofsW.data());
+      // std::cout << "Got local: " << v2s(block) << "\n";
+      // 3. Compute local DKT gradient for this cell and subspace
+      apply_vec(block, p22coeffs);
+      // std::cout << "Computed local: " << v2s(p22coeffs) << "\n";
+      // 4. Insert coeffs into fun using T's dofmap
+      auto dmT = T->sub(i)->dofmap().get();
+      auto dofsT = dmT->cell_dofs(cell->index());
+      // std::cout << "Set dofs: " << v2s(dofsT) << "\n";
+      assert(p22coeffs.size() == dofsT.size());
+      vec->set(p22coeffs.data(), dofsT.size(), dofsT.data());
+      // std::cout << "Done.\n";
+      // 4.1 Check ranges for parallel ???
+    }
+  }
+  // std::cout << "Apllying all...";
+  vec->apply("insert");
+  // std::cout << " Done.\n";
+  return fun;
 }
