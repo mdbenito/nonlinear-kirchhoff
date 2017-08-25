@@ -35,8 +35,8 @@ namespace dolfin {
     /// Read the contents of the blocks into the flattened Matrix
     void read(int i, int j);
 
-    const PETScMatrix& get() const { return *_A; }
-    PETScMatrix& get() { return *_A; }
+    std::shared_ptr<const PETScMatrix> get() { return _A; }
+
   protected:
     /// Initialise offsets and patterns of non zeros from blocks in
     /// the BlockMatrix

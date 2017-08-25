@@ -95,4 +95,5 @@ BlockVectorAdapter::write(int i)
   _V->get_local(values.data(), nrows , rows.data());
   std::iota(rows.begin(), rows.end(), 0);
   V->set_local(values.data(), nrows, rows.data());
+  V->apply("insert");
 }
