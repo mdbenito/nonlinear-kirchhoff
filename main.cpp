@@ -13,6 +13,7 @@
 #include "BlockMatrixAdapter.h"
 #include "BlockVectorAdapter.h"
 #include "output.h"
+#include "tests.h"
 #include "sweet/options.hpp"
 
 using namespace dolfin;
@@ -27,7 +28,7 @@ class Force : public Expression
   {
     values[0] = 0;
     values[1] = 0;
-    values[2] = 1e-5;
+    values[2] = -1e-5;
   }
   std::size_t value_rank() const { return 1; }
   std::size_t value_dimension(std::size_t i) const { return 3;}
@@ -107,28 +108,6 @@ round_zeros(GenericVector& v, double precision=1e-6)
     v.set_local(block.data(), numrows, rows.data());
 }
 
-void
-test_dofs(std::shared_ptr<RectangleMesh> mesh)
-{
-  auto W3 = std::make_shared<NLK::Form_dkt_FunctionSpace_0>(mesh);
-  auto T3 = std::make_shared<NLK::Form_p26_FunctionSpace_0>(mesh);
-
-  auto y0 = project_dkt(std::make_shared<Constant>(1.0, 2.0, 3.0),
-                        W3);
-
-  NLK::dump_full_tensor(*(y0->vector()), 2, "y0", false);
-
-  for (CellIterator cell(*mesh); !cell.end(); ++cell)
-  {
-    auto dofs = W3->dofmap()->cell_dofs(cell->index());
-    std::cout << "Cell: " << cell->index() << ", DOFs: ";
-    for (int i = 0; i < dofs.size()-1; ++i)
-      std::cout << dofs[i] << ", ";
-    std::cout << dofs[dofs.size()-1] << std::endl;
-  }
-}
-
-
 /// Does the magic.
 ///
 ///   mesh: duh.
@@ -202,7 +181,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
   *A *= 1 + alpha*tau;   // because we transform A here
   bc.apply(*A);
   table("Assembly", "time") = toc();
-  NLK::dump_full_tensor(*A, 12, "A.txt");
+  NLK::dump_full_tensor(A, 12, "A.txt");
   std::cout << "Done.\n";
 
   /// Lower right block
@@ -278,19 +257,26 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
   table("Solution", "time") = 0;
   table("Stopping condition", "time") = 0;
   DKTGradient grad;
-  while (! stop && ++step <= max_steps) {
+  while (! stop && ++step <= max_steps)
+  {
+
+    // FIXMEEEEE
+    // THE UPDATE NEVER CHANGES, SO EITHER THE CONSTRAINT OR THE RHS ARE
+    //   NOT BEING UPDATED.
+          
     std::cout << "\n## Step " << step << " ##\n\n";
     std::cout << "Computing RHS... ";
     tic();
     // This isn't exactly elegant...
     Ao->mult(*(y.vector()), *top_Fk);  // Careful! use the copy Ao
-    *top_Fk -= L;
-    *top_Fk *= -tau;
+    *top_Fk *= -alpha;
+    *top_Fk += L;
     bc.apply(*top_Fk);
     Fk.read(0);
     table("RHS computation", "time") =
       table.get_value("RHS computation", "time") + toc();
     std::cout << "Done.\n";
+    std::cout << "Norm of RHS: " << norm(*(Fk.get())) << "\n";
     NLK::dump_full_tensor(Fk.get(), 12, "Fk.txt");
     
     std::cout << "Updating discrete isometry constraint... ";
@@ -301,30 +287,32 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
     table("Constraint updates", "time") =
       table.get_value("Constraint updates", "time") + toc();
     std::cout << "Done.\n";
-    NLK::dump_full_tensor(*(Bk.get()), 12, "Bk.txt");
+    std::cout << "Norm of Bk: " << Bk.get()->norm("frobenius") << "\n";
+    NLK::dump_full_tensor(Bk.get(), 12, "Bk.txt");
     
     std::cout << "Solving... ";
     tic();
-    solver.solve(Mk.get(), dtY_L.get(), Fk.get());
+    solver.solve(*(Mk.get()), *(dtY_L.get()), *(Fk.get()));
     dtY_L.write(0);  // Update block_dtY_L(0) back from dty_L, i.e. dtY
     table("Solution", "time") =
       table.get_value("Solution", "time") + toc();
     std::cout << "Done.\n";
+    std::cout << "Norm of solution: " << norm(*(dtY_L.get())) << "\n";
     NLK::dump_full_tensor(dtY_L.get(), 12, "dtY_L.txt");
 
     std::cout << "Testing whether we should stop... ";
     tic();
-      
-    auto gr = grad.apply_vec(T3, W3, dtY);
-    // std::cout << "Discrete gradient: " << v2s(*(gr->vector())) << "\n";
-    auto nr = norm(*(gr->vector()));
+    auto gr = std::shared_ptr<Vector>(std::move(grad.apply_vec(T3, W3, dtY)));
+    // NLK::dump_full_tensor(gr, 4, "Discrete gradient: ", false);
+    auto nr = norm(*gr);
     std::cout << "Norm of discrete gradient: " << nr << "\n";
-    stop = (nr < 1e-10) && step > 100;
+    stop = nr < 1e-6 || nr > 1;  // FIXME: if nr > 1 we are diverging...
     table("Stopping condition", "time") =
       table.get_value("Stopping condition", "time") + toc();
     
     y.vector()->axpy(-tau, *dtY);  // y = y - tau*dty
-    NLK::dump_full_tensor(*(y.vector()), 12, "yk.txt");
+    std::cout << "Norm of deformation: " << norm(*(y.vector())) << "\n";
+    NLK::dump_full_tensor(y.vector(), 12, "yk.txt");
   }
   
   NLK::dump_full_tensor(Mk.get(), 12, "Mk.txt");
@@ -350,7 +338,8 @@ main(int argc, char** argv)
   double eps = 1e-6;  // TODO: unused
   int pause = 0;
   std::string diagonal = "right";
-
+  std::string test = "";
+  
   bool help = false;
   sweet::Options opt(argc, const_cast<char**>(argv),
                      "Nonlinear Kirchhoff model on the unit square.");
@@ -364,8 +353,21 @@ main(int argc, char** argv)
   opt.get("-x", "--max_steps", "Maximum number of time steps", max_steps);
   opt.get("-e", "--eps_stop", "Stopping threshold (TODO)", eps);
   opt.get("-p", "--pause", "Pause each worker for so many seconds before starting, in order to attach a debugger", pause);
+  opt.get("-T", "--test", "Run the specified test", test);
   if (opt.help_requested())
     return 1;
+
+  if (test == "dofs") {
+    std::cout << "Running test " << test << "...\n";
+    NLK::DEBUG = 3;
+    return test_dofs();
+  } else if (test == "blockvector") {
+    std::cout << "Running test " << test << "...\n";
+    NLK::DEBUG = 3;
+    return test_BlockVectorAdapter();
+  }
+
+  // else...
   
   auto mesh = std::make_shared<RectangleMesh>(MPI_COMM_WORLD,
                                               Point (LEFT, BOTTOM),

@@ -94,6 +94,7 @@ add_executable(${PROJECT_NAME} ${FFC_GENERATED_SOURCES}
   BlockMatrixAdapter.cpp
   BlockVectorAdapter.cpp
   output.cpp
+  tests.cpp
   main.cpp)
 
 target_link_libraries(${PROJECT_NAME} ${DOLFIN_LIBRARIES})

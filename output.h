@@ -20,12 +20,21 @@ namespace NLK {
   /*! Writes a tensor in format understandable by numpy.loadtxt() */
   void dump_full_tensor(const dolfin::GenericMatrix& A, int precision=14,
                         const std::string& name="", bool asfile=true);
+  void dump_full_tensor(std::shared_ptr<const dolfin::GenericMatrix> A,
+                        int precision=14,
+                        const std::string& name="", bool asfile=true);
+
   /*! Writes a vector in format understandable by numpy.loadtxt() */  
   void dump_full_tensor(const dolfin::GenericVector& A, int precision=14,
                         const std::string& name="", bool asfile=true);
+  void dump_full_tensor(std::shared_ptr<const dolfin::GenericVector> A,
+                        int precision=14,
+                        const std::string& name="", bool asfile=true);
+
   /*! Writes a matrix in format understandable by numpy.loadtxt() */
   void dump_raw_matrix(const double* A, int m, int n, int precision=14,
                        const std::string& name="", bool asfile=true);
+    
   /*! Writes a vector in format understandable by numpy.loadtxt() */  
   void dump_raw_matrix(const std::vector<double>& A, int m, int n,
                        int precision=14,

@@ -48,6 +48,12 @@ namespace NLK {
     }
   }
 
+  void dump_full_tensor(std::shared_ptr<const dolfin::GenericMatrix> A,
+                        int precision, const std::string& name, bool asfile)
+  {
+    return dump_full_tensor(*A, precision, name, asfile);
+  }
+  
   void
   dump_full_tensor(const GenericVector& A, int precision,
                    const std::string& name, bool asfile)
@@ -74,6 +80,12 @@ namespace NLK {
     for (int i = 0; i < num_entries-1; i++)
       *out << block[i] << " ";
     *out << block[num_entries - 1] << std::endl;
+  }
+
+  void dump_full_tensor(std::shared_ptr<const dolfin::GenericVector> A,
+                        int precision, const std::string& name, bool asfile)
+  {
+    return dump_full_tensor(*A, precision, name, asfile);
   }
 
   void dump_raw_matrix(const double* A, int m, int n, int precision,
