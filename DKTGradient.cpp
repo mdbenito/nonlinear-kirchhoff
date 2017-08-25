@@ -155,13 +155,12 @@ DKTGradient::apply_vec(const P3Vector& p3coeffs, P22Vector& p22coeffs)
   dest = _M * arg;
 }
 
-std::unique_ptr<Function>
-DKTGradient::apply_vec(std::shared_ptr<FunctionSpace> T,   // (P2^2)^3
-                       std::shared_ptr<FunctionSpace> W,   // DKT^3
-                       std::shared_ptr<Vector>& dktvec)
+std::unique_ptr<Vector>
+DKTGradient::apply_vec(std::shared_ptr<const FunctionSpace> T,   // (P2^2)^3
+                       std::shared_ptr<const FunctionSpace> W,   // DKT^3
+                       std::shared_ptr<const Vector> dktvec)
 {
-  std::unique_ptr<Function> fun(new Function(T));
-  auto vec = fun->vector();
+  std::unique_ptr<Vector> vec(new Vector(MPI_COMM_WORLD, T->dim()));
   
   P22Vector p22coeffs;
   auto p3coeffs = std::vector<double>(12);
@@ -202,5 +201,5 @@ DKTGradient::apply_vec(std::shared_ptr<FunctionSpace> T,   // (P2^2)^3
   // std::cout << "Apllying all...";
   vec->apply("insert");
   // std::cout << " Done.\n";
-  return fun;
+  return vec;
 }

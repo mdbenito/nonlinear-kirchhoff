@@ -87,10 +87,10 @@ public:
    * Returns:
    *    Function in T
    */
-  std::unique_ptr<dolfin::Function>
-  apply_vec(std::shared_ptr<dolfin::FunctionSpace> T,
-            std::shared_ptr<dolfin::FunctionSpace> W,
-            std::shared_ptr<dolfin::Vector>& dktfun);
+  std::unique_ptr<dolfin::Vector>
+  apply_vec(std::shared_ptr<const dolfin::FunctionSpace> T,
+            std::shared_ptr<const dolfin::FunctionSpace> W,
+            std::shared_ptr<const dolfin::Vector> dktfun);
                         
 protected:
   M_t   _M;  // cell-local gradient matrix
