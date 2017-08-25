@@ -1,3 +1,7 @@
+// This file is heavily based on Assembler.cpp fron DOLFIN's code
+// Copyright (C) 2007-2015 Anders Logg with modifications by Garth
+// N. Wells 2007-2009, Ola Skavhaug 2007-2009, Kent-Andre Mardal 2008,
+// Joachim B Haga 2012, Martin Alnaes 2013-2015
 #include <cassert>
 #include <algorithm>
 
@@ -90,7 +94,7 @@ void KirchhoffAssembler::assemble_cells(
   // assert(form_rank == a.rank());
   // assert(form_rank == 2);
   
-  int range_dim = 3;  // HACK
+  int range_dim = 3;  // MBD HACK
   
   // Collect pointers to dof maps
   // MBD We use the DKT form 'a' here, so this is ok

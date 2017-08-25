@@ -37,10 +37,10 @@ namespace dolfin
     ///         The tensor to assemble.
     ///     a (_Form_)
     ///         The P_3^{red} form to assemble the tensor from
-    ///     p22form (_Form_)
-    ///         The (\nabla u, \nabla v) P_2^2 form to assemble the
+    ///     p26form (_Form_)
+    ///         The (\nabla u, \nabla v) P_2^6 form to assemble the
     ///         tensor from.
-    void assemble(GenericMatrix& A, const Form& a, const Form& p22form);
+    void assemble(GenericMatrix& A, const Form& a, const Form& p26form);
 
     void assemble_cells(GenericMatrix& A, const Form& a, UFC& ufc,
                         std::shared_ptr<const MeshFunction<std::size_t>> domains,
