@@ -4,14 +4,14 @@ This is a C++ implementation in [FEniCS](www.fenicsproject.org) of the
 nonlinear Kirchhoff model using a non-conforming implementation with
 Discrete Kirchhoff Triangles as described in [1].
 
-
+Note that there is a typo in the discrete equations in p. 521: the top
+block of the right hand side should read $ - \alpha T^t S T Y^n + F$.
 
 ## To do
 
 1. Parallel operation across all classes. Check `IsometryConstraint`,
    `KirchhoffAssembler` and `DKTGradient` in particular.
-2. Stopping condition: $||\nabla \theta (d_t y^{n+1}_h) || < \epsilon $
-3. Implement a check on the validity of the boundary conditions for
+2. Implement a check on the validity of the boundary conditions for
    the initial deformation of the gradient flow.
 
 Remember to check `DiscreteOperators.h` in the dolfin sources for some
