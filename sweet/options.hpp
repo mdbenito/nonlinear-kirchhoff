@@ -19,9 +19,10 @@ namespace sweet {
   class Options {
     static const int terminal_width = 77;
     struct Option {
-      std::string s, l, d;
+      std::string s, l, d, v;
       Option(const std::string& shr, const std::string& lo, 
-             const std::string& de) : s(shr), l(lo), d(de) {
+             const std::string& de, const std::string& val)
+        : s(shr), l(lo), d(de), v(val) {
       }
 
       void toCmdLine(size_t ls, size_t ll) {
@@ -32,7 +33,7 @@ namespace sweet {
         std::cout<<std::setw(ll)<<((l.size() == 0) ? std::string(" ") +
                                    "  " : (l + "  "));
         cur = ls + ll;
-        for(auto it : d) {
+        for(auto it : d + v) {
           if(cur % terminal_width == 0) {
             if(it != ' ') {
               std::cout<<'-';
@@ -68,8 +69,8 @@ namespace sweet {
       std::pair<IterType, IterType>, 
       std::pair<IterType, IterType>
       > getIterator(const std::string& s, const std::string& l, 
-                    const std::string& d, int cnt) {
-      opts.push_back(Option(s, l, d));
+                    const std::string& d, const std::string& v, int cnt) {
+      opts.push_back(Option(s, l, d, v));
       auto sit = mapping.equal_range(s);
       auto lit = mapping.equal_range(l);
       if(std::distance(sit.first, sit.second) >= cnt && 
@@ -95,7 +96,10 @@ namespace sweet {
     template<typename T>
     Options& get(const std::string& s, const std::string& l, const
                  std::string& d, T& t) {
-      auto it = getIterator(s, l, d, 1);
+      std::ostringstream os;
+      if (! std::is_same<T,bool>::value)
+        os << " [" << t << "]"; // only provide default if non bool (non-switch opts)
+      auto it = getIterator(s, l, d, os.str(), 1);
       auto sit = it.first;
       auto lit = it.second;
       if(std::distance(sit.first, sit.second) == 1) {
@@ -117,7 +121,7 @@ namespace sweet {
     template<typename T>
     Options& getMultiple(const std::string& s, const std::string& l, const
                          std::string& d, std::vector<T>& t) {
-      opts.push_back(Option(s, l, d));		
+      opts.push_back(Option(s, l, d, ""));
       auto sit = mapping.equal_range(s);
       auto lit = mapping.equal_range(l);
       for(; sit.first != sit.second; ++sit.first) {
