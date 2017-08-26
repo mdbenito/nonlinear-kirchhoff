@@ -154,7 +154,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
   
   auto& v = *(y0->vector());
   round_zeros(v);  // This modifies y0
-  NLK::dump_full_tensor(v, 4, "y0.txt");
+  NLK::dump_full_tensor(v, 4, "y0.data");
 
   ////////////////////////////////////////////////////////////////////
   // Assembly of system matrix
@@ -181,12 +181,12 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
   *A *= 1 + alpha*tau;   // because we transform A here
   bc.apply(*A);
   table("Assembly", "time") = toc();
-  NLK::dump_full_tensor(A, 12, "A.txt");
+  NLK::dump_full_tensor(A, 12, "A.data");
   std::cout << "Done.\n";
 
   /// Lower right block
   auto paddingMat = Bk.get_padding();
-  NLK::dump_full_tensor(*paddingMat, 12, "D.txt");
+  NLK::dump_full_tensor(*paddingMat, 12, "D.data");
   
   auto block_Mk = std::make_shared<BlockMatrix>(2, 2);
   block_Mk->set_block(0, 0, A);
@@ -278,7 +278,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
       table.get_value("RHS computation", "time") + toc();
     std::cout << "Done.\n";
     std::cout << "Norm of RHS: " << norm(*(Fk.get())) << "\n";
-    NLK::dump_full_tensor(Fk.get(), 12, "Fk.txt");
+    NLK::dump_full_tensor(Fk.get(), 12, "Fk.data");
     
     std::cout << "Updating discrete isometry constraint... ";
     tic();
@@ -289,7 +289,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
       table.get_value("Constraint updates", "time") + toc();
     std::cout << "Done.\n";
     std::cout << "Norm of Bk: " << Bk.get()->norm("frobenius") << "\n";
-    NLK::dump_full_tensor(Bk.get(), 12, "Bk.txt");
+    NLK::dump_full_tensor(Bk.get(), 12, "Bk.data");
     
     std::cout << "Solving... ";
     tic();
@@ -299,7 +299,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
       table.get_value("Solution", "time") + toc();
     std::cout << "Done.\n";
     std::cout << "Norm of solution: " << norm(*(dtY_L.get())) << "\n";
-    NLK::dump_full_tensor(dtY_L.get(), 12, "dtY_L.txt");
+    NLK::dump_full_tensor(dtY_L.get(), 12, "dtY_L.data");
 
     std::cout << "Testing whether we should stop... ";
     tic();
@@ -313,10 +313,10 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
     
     y.vector()->axpy(-tau, *dtY);  // y = y - tau*dty
     std::cout << "Norm of deformation: " << norm(*(y.vector())) << "\n";
-    NLK::dump_full_tensor(y.vector(), 12, "yk.txt");
+    NLK::dump_full_tensor(y.vector(), 12, "yk.data");
   }
   
-  NLK::dump_full_tensor(Mk.get(), 12, "Mk.txt");
+  NLK::dump_full_tensor(Mk.get(), 12, "Mk.data");
   
   // info(table);  // outputs "<Table of size 5 x 1>"
   std::cout << table.str(true) << std::endl;
@@ -375,10 +375,9 @@ main(int argc, char** argv)
                                               Point (RIGHT, TOP),
                                               m, n, diagonal);
   
-  // In the paper the triangulation consists of halved squares
-  // and tau is the length of the sides i.e. hmin() in our case.
+  // In the paper the triangulation consists of halved squares and tau
+  // is 2^{-1/2} times the length of the sides i.e. hmin() in our case
   tau *= mesh->hmin();
-
 
   /// A trick from the MPI FAQ
   /// (https://www.open-mpi.org/faq/?category=debugging)
