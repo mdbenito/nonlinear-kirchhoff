@@ -149,7 +149,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
   tic();
   // Initial data: careful that it fulfils the BCs.
   auto y0 = project_dkt(std::make_shared<BoundaryData>(), W3);
-  table("Projection of y0", "time") = toc();
+  table("Projection of data", "time") = toc();
   std::cout << "Done.\n";
   
   auto& v = *(y0->vector());
@@ -210,7 +210,8 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
   auto force = std::make_shared<Force>();
   auto f = std::shared_ptr<const Function>(std::move(project_dkt(force,
                                                                  W3)));
-  table("Projection of f", "time") = toc();
+  table("Projection of data", "time") =
+    table.get_value("Projection of data", "time") + toc();
   std::cout << "Done.\n";
 
   std::cout << "Assembling force vector... ";
@@ -256,7 +257,9 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
   table("RHS computation", "time") = 0;
   table("Solution", "time") = 0;
   table("Stopping condition", "time") = 0;
-  DKTGradient grad;
+  // DKTGradient grad;
+  Vector ng;  // intermediate value in computation of stopping cond.
+  Ao->init_vector(ng, 0);
   while (! stop && ++step <= max_steps)
   {
     /*
@@ -277,7 +280,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
     table("RHS computation", "time") =
       table.get_value("RHS computation", "time") + toc();
     std::cout << "Done.\n";
-    std::cout << "Norm of RHS: " << norm(*(Fk.get())) << "\n";
+    // std::cout << "Norm of RHS: " << norm(*(Fk.get())) << "\n";
     NLK::dump_full_tensor(Fk.get(), 12, "Fk.data");
     
     std::cout << "Updating discrete isometry constraint... ";
@@ -288,7 +291,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
     table("Constraint updates", "time") =
       table.get_value("Constraint updates", "time") + toc();
     std::cout << "Done.\n";
-    std::cout << "Norm of Bk: " << Bk.get()->norm("frobenius") << "\n";
+    // std::cout << "Norm of Bk: " << Bk.get()->norm("frobenius") << "\n";
     NLK::dump_full_tensor(Bk.get(), 12, "Bk.data");
     
     std::cout << "Solving... ";
@@ -297,22 +300,21 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
     dtY_L.write(0);  // Update block_dtY_L(0) back from dty_L, i.e. dtY
     table("Solution", "time") =
       table.get_value("Solution", "time") + toc();
-    std::cout << "Done.\n";
-    std::cout << "Norm of solution: " << norm(*(dtY_L.get())) << "\n";
+    std::cout << "Done with norm = "
+              << norm(*(dtY_L.get())) << "\n";
     NLK::dump_full_tensor(dtY_L.get(), 12, "dtY_L.data");
 
     std::cout << "Testing whether we should stop... ";
     tic();
-    auto gr = std::shared_ptr<Vector>(std::move(grad.apply_vec(T3, W3, dtY)));
-    // NLK::dump_full_tensor(gr, 4, "Discrete gradient: ", false);
-    auto nr = norm(*gr);
-    std::cout << "Norm of discrete gradient: " << nr << "\n";
+    Ao->mult(*dtY, ng);
+    auto nr = std::sqrt(ng.inner(*dtY));
+    std::cout << "norm of \\nabla theta_h dtY =  " << nr << "\n";
     stop = nr < eps || nr > 1;  // FIXME: if nr > 1 we are diverging...
     table("Stopping condition", "time") =
       table.get_value("Stopping condition", "time") + toc();
     
     y.vector()->axpy(-tau, *dtY);  // y = y - tau*dty
-    std::cout << "Norm of deformation: " << norm(*(y.vector())) << "\n";
+    // std::cout << "Norm of deformation: " << norm(*(y.vector())) << "\n";
     NLK::dump_full_tensor(y.vector(), 12, "yk.data");
   }
   
