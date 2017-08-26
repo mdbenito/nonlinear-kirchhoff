@@ -259,11 +259,12 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
   DKTGradient grad;
   while (! stop && ++step <= max_steps)
   {
-
-    // FIXMEEEEE
-    // THE UPDATE NEVER CHANGES, SO EITHER THE CONSTRAINT OR THE RHS ARE
-    //   NOT BEING UPDATED.
-          
+    /*
+  FIXMEEEEE:
+    * NOTHING HAPPENS WITH TAU = h
+    * FLOW DIVERGES WITH TAU ~ 1e-3. TEST WITH -t IN COMMAND LINE
+    * DOES THE ENERGY DECREASE WITH EACH ITERATION? PLOT IT / CHECK THE CONDITION
+    */    
     std::cout << "\n## Step " << step << " ##\n\n";
     std::cout << "Computing RHS... ";
     tic();
@@ -306,7 +307,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
     // NLK::dump_full_tensor(gr, 4, "Discrete gradient: ", false);
     auto nr = norm(*gr);
     std::cout << "Norm of discrete gradient: " << nr << "\n";
-    stop = nr < 1e-6 || nr > 1;  // FIXME: if nr > 1 we are diverging...
+    stop = nr < eps || nr > 1;  // FIXME: if nr > 1 we are diverging...
     table("Stopping condition", "time") =
       table.get_value("Stopping condition", "time") + toc();
     
@@ -333,25 +334,25 @@ main(int argc, char** argv)
   //// Default options
   int m = 4, n = 4;
   double alpha = 1.0;
-  double tau = 1e-6;
+  double tau = 0.7;
   int max_steps = 24;
-  double eps = 1e-6;  // TODO: unused
+  double eps = 1e-6;
   int pause = 0;
   std::string diagonal = "right";
-  std::string test = "";
+  std::string test = "none";
   
   bool help = false;
   sweet::Options opt(argc, const_cast<char**>(argv),
                      "Nonlinear Kirchhoff model on the unit square.");
   opt.get("-h", "--help", "Show this help", help);
-  opt.get("-v", "--verbose", "Debug verbosity level, 0-2", NLK::DEBUG);
+  opt.get("-v", "--verbose", "Debug verbosity level, 0: no output, ... 3: write data files with vectors and matrices", NLK::DEBUG);
   opt.get("-m", "--num_vertical", "number of vertical subdivisions", m);
   opt.get("-n", "--num_horizontal", "number of horizontal subdivisions", n);
   opt.get("-d", "--diagonal", "Direction of diagonals: \"left\", \"right\", \"left/right\", \"crossed\"", diagonal);
   opt.get("-a", "--alpha", "alpha", alpha);
-  opt.get("-t", "--tau", "timestep *scaling*", tau);
+  opt.get("-t", "--tau", "timestep *scaling* wrt. minimal cell size", tau);
   opt.get("-x", "--max_steps", "Maximum number of time steps", max_steps);
-  opt.get("-e", "--eps_stop", "Stopping threshold (TODO)", eps);
+  opt.get("-e", "--eps_stop", "Stopping threshold.", eps);
   opt.get("-p", "--pause", "Pause each worker for so many seconds before starting, in order to attach a debugger", pause);
   opt.get("-T", "--test", "Run the specified test", test);
   if (opt.help_requested())
@@ -410,6 +411,6 @@ main(int argc, char** argv)
         sleep(pause);
   }
   
-  return dostuff(mesh, alpha, tau, max_steps);
+  return dostuff(mesh, alpha, tau, max_steps, eps);
 }
 
