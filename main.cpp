@@ -252,22 +252,16 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
   ////////////////////////////////////////////////////////////////////
   // Main loop
   
-  bool stop = false;  // TODO
+  bool stop = false;
   int step = 0;
   table("RHS computation", "time") = 0;
   table("Solution", "time") = 0;
   table("Stopping condition", "time") = 0;
-  // DKTGradient grad;
-  Vector ng;  // intermediate value in computation of stopping cond.
-  Ao->init_vector(ng, 0);
+  Vector tmp;  // intermediate value for norm computations
+  Ao->init_vector(tmp, 0);
+  std::vector<double> energy_values;
   while (! stop && ++step <= max_steps)
   {
-    /*
-  FIXMEEEEE:
-    * NOTHING HAPPENS WITH TAU = h
-    * FLOW DIVERGES WITH TAU ~ 1e-3. TEST WITH -t IN COMMAND LINE
-    * DOES THE ENERGY DECREASE WITH EACH ITERATION? PLOT IT / CHECK THE CONDITION
-    */    
     std::cout << "\n## Step " << step << " ##\n\n";
     std::cout << "Computing RHS... ";
     tic();
@@ -280,7 +274,6 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
     table("RHS computation", "time") =
       table.get_value("RHS computation", "time") + toc();
     std::cout << "Done.\n";
-    // std::cout << "Norm of RHS: " << norm(*(Fk.get())) << "\n";
     NLK::dump_full_tensor(Fk.get(), 12, "Fk.data");
     
     std::cout << "Updating discrete isometry constraint... ";
@@ -291,7 +284,6 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
     table("Constraint updates", "time") =
       table.get_value("Constraint updates", "time") + toc();
     std::cout << "Done.\n";
-    // std::cout << "Norm of Bk: " << Bk.get()->norm("frobenius") << "\n";
     NLK::dump_full_tensor(Bk.get(), 12, "Bk.data");
     
     std::cout << "Solving... ";
@@ -306,18 +298,22 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
 
     std::cout << "Testing whether we should stop... ";
     tic();
-    Ao->mult(*dtY, ng);
-    auto nr = std::sqrt(ng.inner(*dtY));
+    Ao->mult(*dtY, tmp);
+    auto nr = std::sqrt(tmp.inner(*dtY));
     std::cout << "norm of \\nabla theta_h dtY =  " << nr << "\n";
     stop = nr < eps || nr > 1;  // FIXME: if nr > 1 we are diverging...
     table("Stopping condition", "time") =
       table.get_value("Stopping condition", "time") + toc();
-    
+
     y.vector()->axpy(-tau, *dtY);  // y = y - tau*dty
-    // std::cout << "Norm of deformation: " << norm(*(y.vector())) << "\n";
+    Ao->mult(*(y.vector()), tmp);
+    energy_values.push_back(0.5*alpha * y.vector()->inner(tmp)
+                            - y.vector()->inner(L));
+    std::cout << "Energy = " << energy_values.back() << "\n";
     NLK::dump_full_tensor(y.vector(), 12, "yk.data");
   }
-  
+  NLK::dump_raw_matrix(energy_values, 1, energy_values.size(), 14,
+                       "energy.data", true, true);
   NLK::dump_full_tensor(Mk.get(), 12, "Mk.data");
   
   // info(table);  // outputs "<Table of size 5 x 1>"
