@@ -13,9 +13,9 @@ namespace NLK {
   
   void
   dump_full_tensor(const GenericMatrix& A, int precision,
-                   const std::string& name, bool asfile)
+                   const std::string& name, bool asfile, bool force)
   {
-    if (DEBUG < 2)
+    if (!force && DEBUG < 2)
       return;
     
     auto num_rows = A.size(0);
@@ -49,16 +49,17 @@ namespace NLK {
   }
 
   void dump_full_tensor(std::shared_ptr<const dolfin::GenericMatrix> A,
-                        int precision, const std::string& name, bool asfile)
+                        int precision, const std::string& name,
+                        bool asfile, bool force)
   {
     return dump_full_tensor(*A, precision, name, asfile);
   }
   
   void
   dump_full_tensor(const GenericVector& A, int precision,
-                   const std::string& name, bool asfile)
+                   const std::string& name, bool asfile, bool force)
   {
-    if (DEBUG < 2)
+    if (!force && DEBUG < 2)
       return;
     
     auto num_entries = A.size(0);
@@ -83,15 +84,15 @@ namespace NLK {
   }
 
   void dump_full_tensor(std::shared_ptr<const dolfin::GenericVector> A,
-                        int precision, const std::string& name, bool asfile)
+                        int precision, const std::string& name, bool asfile, bool force)
   {
     return dump_full_tensor(*A, precision, name, asfile);
   }
 
   void dump_raw_matrix(const double* A, int m, int n, int precision,
-                       const std::string& name, bool asfile)
+                       const std::string& name, bool asfile, bool force)
   {
-    if (DEBUG < 2)
+    if (!force && DEBUG < 2)
       return;
     
     std::ostream* out = &std::cout;
@@ -113,11 +114,8 @@ namespace NLK {
 
   void
   dump_raw_matrix(const std::vector<double>& A, int m, int n, int precision,
-                  const std::string& name, bool asfile)
+                  const std::string& name, bool asfile, bool force)
   {
-    if (DEBUG < 2)
-      return;
-
-    dump_raw_matrix(A.data(), m, n, precision, name, asfile);
+    dump_raw_matrix(A.data(), m, n, precision, name, asfile, force);
   }
 }
