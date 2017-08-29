@@ -28,7 +28,7 @@ class Force : public Expression
   {
     values[0] = 0;
     values[1] = 0;
-    values[2] = -1e-5;
+    values[2] = 1e-5;
   }
   std::size_t value_rank() const { return 1; }
   std::size_t value_dimension(std::size_t i) const { return 3;}
