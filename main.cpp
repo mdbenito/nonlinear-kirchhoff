@@ -108,6 +108,45 @@ round_zeros(GenericVector& v, double precision=1e-6)
     v.set_local(block.data(), numrows, rows.data());
 }
 
+
+double
+discrete_energy(double alpha,
+                std::shared_ptr<const GenericMatrix> Ao,  /* Matrix T^t S T */
+                const Function& y, /* solution */
+                const Function& L  /* Force    */)
+{
+  Vector tmp;
+  Ao->init_vector(tmp, 0);
+
+  /// Compute the quadratic term of the energy using the system matrix:
+  Ao->mult(*(y.vector()), tmp);
+  double energy = 0.5*alpha * y.vector()->inner(tmp);
+
+  /// Compute the force term:
+  
+  // FIXME: this should be the integral of the nodal interpolant,
+  // i.e. $\sum_{y \in N_h } f(z) \cdot y(z) \int \phi_z d x$, where
+  // \phi_z is the scalar nodal basis function coming from the
+  // evaluation linear form. However we cannot compute these integrals
+  // due to missing implementation in uflacs (in particular the
+  // hermite mapping is missing in
+  // apply_single_function_pullbacks.py). Because they are constant,
+  // we just ignore them. 
+
+  // take only coefficients for evaluations
+  const auto& v1 = static_cast<const Function>(y[0]).vector();
+  const auto& v2 =static_cast<const Function>(L[0]).vector();
+  assert(v1->size() == v2->size());
+  for (int j = 0; j < v1->size(); ++j) {
+    double val1(0), val2(0);
+    v1->get_local(&val1, 1, &j);
+    v2->get_local(&val2, 1, &j);
+    energy += val1 * val2;
+  }
+  return energy;
+}
+
+
 /// Does the magic.
 ///
 ///   mesh: duh.
@@ -216,10 +255,10 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
 
   std::cout << "Assembling force vector... ";
   NLK::Form_force l(W3);
-  Vector L;
+  Function L(W3);
   tic();
   l.f = f;
-  rhs_assembler.assemble(L, l);
+  rhs_assembler.assemble(*(L.vector()), l);
   table("Assembly", "time") = toc();
   std::cout << "Done.\n";
 
@@ -268,7 +307,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
     // This isn't exactly elegant...
     Ao->mult(*(y.vector()), *top_Fk);  // Careful! use the copy Ao
     *top_Fk *= -alpha;
-    *top_Fk += L;
+    *top_Fk += *(L.vector());
     bc.apply(*top_Fk);
     Fk.read(0);
     table("RHS computation", "time") =
@@ -306,9 +345,8 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
       table.get_value("Stopping condition", "time") + toc();
 
     y.vector()->axpy(-tau, *dtY);  // y = y - tau*dty
-    Ao->mult(*(y.vector()), tmp);
-    energy_values.push_back(0.5*alpha * y.vector()->inner(tmp)
-                            - y.vector()->inner(L));
+    
+    energy_values.push_back(discrete_energy(alpha, Ao, y, L));
     std::cout << "Energy = " << energy_values.back() << "\n";
     NLK::dump_full_tensor(y.vector(), 12, "yk.data");
   }
