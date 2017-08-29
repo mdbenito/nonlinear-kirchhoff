@@ -133,11 +133,11 @@ discrete_energy(double alpha,
   // apply_single_function_pullbacks.py). Because they are constant,
   // we just ignore them. 
 
-  // take only coefficients for evaluations
-  const auto& v1 = static_cast<const Function>(y[0]).vector();
-  const auto& v2 =static_cast<const Function>(L[0]).vector();
+  const auto& v1 = y.vector();
+  const auto& v2 = L.vector();
   assert(v1->size() == v2->size());
-  for (int j = 0; j < v1->size(); ++j) {
+  // take only coefficients for evaluations
+  for (int j = 0; j < v1->size(); j+=3) {
     double val1(0), val2(0);
     v1->get_local(&val1, 1, &j);
     v2->get_local(&val2, 1, &j);
