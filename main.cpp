@@ -344,7 +344,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
     table("Stopping condition", "time") =
       table.get_value("Stopping condition", "time") + toc();
 
-    y.vector()->axpy(-tau, *dtY);  // y = y - tau*dty
+    y.vector()->axpy(tau, *dtY);  // y = y + tau*dty
     
     energy_values.push_back(discrete_energy(alpha, Ao, y, L));
     std::cout << "Energy = " << energy_values.back() << "\n";
