@@ -157,8 +157,8 @@ discrete_energy(double alpha,
 ///        at most so much (TODO)
 /// TODO: allow an adaptive step size policy
 int
-dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
-        int max_steps, double eps=1e-5)
+dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
+        double tau, double adaptive_steps, double adaptive_factor)
 {
   KirchhoffAssembler assembler;
   Assembler rhs_assembler;
@@ -292,7 +292,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
   // Main loop
   
   bool stop = false;
-  int step = 0;
+  int step = 0, dec_ctr = 0;  // dec_ctr keeps track of tau decreasing
   table("RHS computation", "time") = 0;
   table("Solution", "time") = 0;
   table("Stopping condition", "time") = 0;
@@ -345,9 +345,23 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
       table.get_value("Stopping condition", "time") + toc();
 
     y.vector()->axpy(tau, *dtY);  // y = y + tau*dty
+
     
-    energy_values.push_back(discrete_energy(alpha, Ao, y, L));
-    std::cout << "Energy = " << energy_values.back() << "\n";
+    double energy = discrete_energy(alpha, Ao, y, L); 
+    energy_values.push_back(energy);
+    if (step > 2) {
+      double prev = *(energy_values.end()-2);
+      std::cout << "Energy change: " << 100*(energy - prev)/prev << "%\n";
+      // check unconditional stability:
+      std::cout << "This step is " << (energy+tau*nr*nr <= prev ? "OK" : "WRONG")
+                << ".\n";
+    }
+    
+    if(std::floor(step / adaptive_steps) > dec_ctr) {
+      dec_ctr = std::floor(step / adaptive_steps);
+      tau *= adaptive_factor;
+    }
+
     NLK::dump_full_tensor(y.vector(), 12, "yk.data");
   }
   NLK::dump_raw_matrix(energy_values, 1, energy_values.size(), 14,
@@ -376,7 +390,7 @@ main(int argc, char** argv)
   int pause = 0;
   std::string diagonal = "right";
   std::string test = "none";
-  
+  std::vector<double> adaptive{100, 0.9};  // every 100 steps: tau *= 0.9
   bool help = false;
   sweet::Options opt(argc, const_cast<char**>(argv),
                      "Nonlinear Kirchhoff model on the unit square.");
@@ -387,6 +401,7 @@ main(int argc, char** argv)
   opt.get("-d", "--diagonal", "Direction of diagonals: \"left\", \"right\", \"left/right\", \"crossed\"", diagonal);
   opt.get("-a", "--alpha", "alpha", alpha);
   opt.get("-t", "--tau", "timestep *scaling* wrt. minimal cell size", tau);
+  opt.getMultiple("-c", "--correction", "Adaptive parameters for tau (number of timesteps, multiplier)", adaptive);
   opt.get("-x", "--max_steps", "Maximum number of time steps", max_steps);
   opt.get("-e", "--eps_stop", "Stopping threshold.", eps);
   opt.get("-p", "--pause", "Pause each worker for so many seconds before starting, in order to attach a debugger", pause);
@@ -414,7 +429,9 @@ main(int argc, char** argv)
   // In the paper the triangulation consists of halved squares and tau
   // is 2^{-1/2} times the length of the sides i.e. hmin() in our case
   tau *= mesh->hmin();
-
+  double adaptive_steps = adaptive[0];  // decrease tau every so many steps
+  double adaptive_factor = adaptive[1]; // by such a multiplier
+  
   /// A trick from the MPI FAQ
   /// (https://www.open-mpi.org/faq/?category=debugging)
   //
@@ -445,7 +462,8 @@ main(int argc, char** argv)
     while (pause > 0)
         sleep(pause);
   }
-  
-  return dostuff(mesh, alpha, tau, max_steps, eps);
+
+  return dostuff(mesh, alpha, max_steps, eps, tau,
+                 adaptive_steps, adaptive_factor);
 }
 
