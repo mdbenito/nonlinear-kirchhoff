@@ -307,7 +307,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, double tau,
     // This isn't exactly elegant...
     Ao->mult(*(y.vector()), *top_Fk);  // Careful! use the copy Ao
     *top_Fk *= -alpha;
-    *top_Fk += *(L.vector());
+    top_Fk->axpy(tau, *(L.vector()));
     bc.apply(*top_Fk);
     Fk.read(0);
     table("RHS computation", "time") =
