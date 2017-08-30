@@ -4,7 +4,36 @@
 #include <string>
 #include <iostream>
 #include <sstream>
+#include <numeric>
 
+///// stepping_iota():
+// Original code from https://codereview.stackexchange.com/a/136158
+// The specifications [of std::iota] say that it is not required for
+// decltype(*first) and T to match. So we can implement a very small
+// proxy, which will have all the needed functionality.
+namespace impl_details
+{
+  template <typename T, typename UnaryAdvanceOp>
+  class proxy {
+    T value;
+    UnaryAdvanceOp op;
+  public:
+    proxy(T init_value, UnaryAdvanceOp op_) : value(init_value), op(op_) {}
+
+    operator T() { return value; }
+    T operator++() { value = op(value); return value; }
+    T operator++(int) { T old = value; value = op(value); return old; }
+  };
+}
+
+template <typename OutputIterator, typename T, typename UnaryAdavanceOp>
+void stepping_iota(OutputIterator first, OutputIterator last,
+                   T init_value, UnaryAdavanceOp op)
+{
+  impl_details::proxy<T, UnaryAdavanceOp> p(init_value, op);
+  std::iota(first, last, p);
+}
+  
 namespace dolfin {
   class GenericMatrix;
   class GenericVector;
