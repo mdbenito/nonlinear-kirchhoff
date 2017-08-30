@@ -291,6 +291,8 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
   ////////////////////////////////////////////////////////////////////
   // Main loop
   
+  File file("solution.pvd");  // Save solution in VTK format
+  file << y;   // Save initial condition
   bool stop = false;
   int step = 0, dec_ctr = 0;  // dec_ctr keeps track of tau decreasing
   table("RHS computation", "time") = 0;
@@ -360,6 +362,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
     if(std::floor(step / adaptive_steps) > dec_ctr) {
       dec_ctr = std::floor(step / adaptive_steps);
       tau *= adaptive_factor;
+      file << y;  // output current solution
     }
 
     NLK::dump_full_tensor(y.vector(), 12, "yk.data");
@@ -367,14 +370,12 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
   NLK::dump_raw_matrix(energy_values, 1, energy_values.size(), 14,
                        "energy.data", true, true);
   NLK::dump_full_tensor(Mk.get(), 12, "Mk.data");
+
+  file << y;  // output last solution
   
   // info(table);  // outputs "<Table of size 5 x 1>"
   std::cout << table.str(true) << std::endl;
 
-  // Save solution in VTK format
-  File file("solution.pvd");
-  file << y;
-  
   return 0;   // mpirun expects 0 for success
 }
 
