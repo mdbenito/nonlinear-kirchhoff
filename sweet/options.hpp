@@ -94,8 +94,8 @@ namespace sweet {
     }
 
     template<typename T>
-    Options& get(const std::string& s, const std::string& l, const
-                 std::string& d, T& t) {
+    Options& get(const std::string& s, const std::string& l,
+                 const std::string& d, T& t) {
       std::ostringstream os;
       if (! std::is_same<T,bool>::value)
         os << " [" << t << "]"; // only provide default if non bool (non-switch opts)
@@ -118,9 +118,11 @@ namespace sweet {
       return *this;
     }
 
+    // Reads multiple values for an option
+    // The switch must be repeated (e.g. -c 1.0 -c 0.9 -c 100) (CHECK THIS)
     template<typename T>
-    Options& getMultiple(const std::string& s, const std::string& l, const
-                         std::string& d, std::vector<T>& t) {
+    Options& getMultiple(const std::string& s, const std::string& l,
+                         const std::string& d, std::vector<T>& t) {
       opts.push_back(Option(s, l, d, ""));
       auto sit = mapping.equal_range(s);
       auto lit = mapping.equal_range(l);
