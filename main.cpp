@@ -146,6 +146,57 @@ discrete_energy(double alpha,
   return energy;
 }
 
+bool
+test_bc(const SubDomain& subdomain, const Function& u, const Function& bc)
+{
+  /// Extract info and ensure the mesh (connectivity) has been initialised
+  auto W = bc.function_space();
+  auto dm = W->dofmap();
+  auto mesh = W->mesh();
+  auto D = mesh->topology().dim();
+  W->mesh()->init(D);
+  W->mesh()->init(D - 1);
+  W->mesh()->init(D - 1, D);
+
+  /// Build mesh function using the SubDomain and iterate facets using it
+  /// (TODO: there must be some other way)
+  FacetFunction<std::size_t> subdomains(mesh, 1);
+  subdomain.mark(subdomains, 42, false);  // don't check midpoints
+
+  for (FacetIterator facet(*mesh); !facet.end(); ++facet) {
+    if (subdomains[*facet] != 42)   // nothing to do
+      continue;
+
+    // Get cell to which facet belongs and local index.
+    dolfin_assert(facet.num_entities(D) > 0);
+    const auto cell_index = facet->entities(D)[0];
+    const Cell cell(*mesh, cell_index);
+    const auto facet_local_index = cell.index(*facet);
+
+    // local-global dof mapping for cell
+    const auto cell_dofs = dm->cell_dofs(cell.index());
+    // local-local dof mapping of dofs on the facet
+    std::vector<std::size_t> local_facet_dofs;
+    dm->tabulate_facet_dofs(local_facet_dofs, facet_local_index);
+    // Vector::get() doesn't like size_t... duh!
+    std::vector<la_index> facet_dofs(local_facet_dofs.size());
+    // local-global mapping for facet dofs
+    std::transform(local_facet_dofs.begin(), local_facet_dofs.end(),
+                   facet_dofs.begin(),
+                   [&cell_dofs] (std::size_t& dof) {
+                     return static_cast<la_index>(cell_dofs[dof]);
+                   });
+    // Test values for facet
+    la_index numrows = facet_dofs.size();
+    std::vector<double> uvalues(numrows), bcvalues(numrows);
+    u.vector()->get(uvalues.data(), numrows, facet_dofs.data());
+    bc.vector()->get(bcvalues.data(), numrows, facet_dofs.data());
+    if (uvalues != bcvalues)
+      return false;
+  }
+  return true;
+}
+
 
 /// Does the magic.
 ///
@@ -347,7 +398,9 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
       table.get_value("Stopping condition", "time") + toc();
 
     y.vector()->axpy(tau, *dtY);  // y = y + tau*dty
-
+    std::cout << "Testing boundary conditions... "
+              << (test_bc(*bdry, y, *y0) ? "OK." : "WRONG!!!")
+              << "\n";
     
     double energy = discrete_energy(alpha, Ao, y, L); 
     energy_values.push_back(energy);
