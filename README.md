@@ -9,10 +9,9 @@ block of the right hand side should read $ - \alpha T^t S T Y^n + F$.
 
 ## To do
 
-1. Parallel operation across all classes. Check `IsometryConstraint`,
+1. The problem with skewed solutions has reappeared!!!
+2. Parallel operation across all classes. Check `IsometryConstraint`,
    `KirchhoffAssembler` and `DKTGradient` in particular.
-2. Implement a check on the validity of the boundary conditions for
-   the initial deformation of the gradient flow.
 
 Remember to check `DiscreteOperators.h` in the dolfin sources for some
 ideas.
