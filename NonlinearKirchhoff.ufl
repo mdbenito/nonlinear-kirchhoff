@@ -1,6 +1,7 @@
 p26element = TensorElement("Lagrange", triangle, 2, shape=(3,2))
 dktelement = VectorElement("DKT", triangle, 3, dim=3)
 project_element = VectorElement("Lagrange", triangle, 3, dim=3)
+cg1element = FiniteElement("Lagrange", triangle, 1)
 
 p = TrialFunction(p26element)
 q = TestFunction(p26element)
@@ -10,8 +11,17 @@ u = TrialFunction(dktelement)
 v = TestFunction(dktelement)
 dkt = inner(u,v)*dx
 
+# Careful! This seems to compute the integral after interpolating.
+# The vector of coefficients L has all entries for Hermite dofs set to
+# zero. However, this is what we want for our model (the RHS is
+# approximated using the nodal interpolant), so this shouldn't be an
+# issue.
 f = Coefficient(dktelement)
 force = inner(f,v)*dx
+
+# Use this to compute the integral of the nodal interpolant
+z = TestFunction(cg1element)
+beta = z*dx
 
 # Define variational problem for projection
 g = Coefficient(project_element)
@@ -21,5 +31,5 @@ project_lhs = inner(w, Pg)*dx
 project_rhs = inner(w, g)*dx
 
 # Items to export 
-elements = [p26element, dktelement, project_element]
-forms = [p26, dkt, force, project_lhs, project_rhs]
+#elements = [p26element, dktelement, project_element, cg1element]
+forms = [p26, dkt, force, beta, project_lhs, project_rhs, bih]

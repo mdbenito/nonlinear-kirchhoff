@@ -312,6 +312,48 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
   rhs_assembler.assemble(*(L.vector()), l);
   table("Assembly", "time") = toc();
   std::cout << "Done.\n";
+  
+#if 0
+  //////////////////////////////////////////////////////////////////////////////
+  // FIXME!!!!  instead of fixing the RHS with the integral of the
+  // nodal basis funtions, this screws the third component of the
+  // solution, setting it to 0!!?!?! It could be that the ordering
+  // I've assumed for the global dofs is wrong.
+
+  // Computing integrals of CG1 basis functions
+  auto CG = std::make_shared<NLK::Form_beta_FunctionSpace_0>(mesh);
+  NLK::Form_beta beta(CG);
+  Function integrals(CG);
+  rhs_assembler.assemble(*(integrals.vector()), beta);
+  std::cout << "Computed CG1 integrals.\n";
+  
+  // Copy values onto real RHS:
+  std::vector<la_index> from, to;
+  auto v2d_DKT = vertex_to_dof_map(*W3);
+  auto v2d_CG = vertex_to_dof_map(*CG);
+  for (VertexIterator v(*(W3->mesh())); !v.end(); ++v) {
+    // The following should be a process-local index
+    auto idx = static_cast<la_index>(v->index());
+    auto dofcg = v2d_CG[idx];
+    for (int sub = 0; sub < 3; ++sub) {     // iterate over the 3 subspaces
+      auto dofdkt = v2d_DKT[9*idx + 3*sub];
+      from.push_back(dofcg);
+      to.push_back(dofdkt);
+    }
+  }
+  // std::vector<double> saved(to.size());
+  // L.vector()->get_local(saved.data(), to.size(), to.data());
+  std::vector<double> data(from.size());
+  integrals.vector()->get_local(data.data(), from.size(), from.data());
+  for(auto& d: data) d *= 1e-5;  /// HACK! scale with force
+  L.vector()->set_local(data.data(), to.size(), to.data());
+#endif
+  
+  // std::vector<double> diffs(data.size());
+  // std::transform(data.begin(), data.end(), saved.begin(), diffs.begin(),
+  //                [](double x, double y) { return std::abs(x-y); });
+  // auto normdiffs = std::accumulate(diffs.begin(), diffs.end(), 0.0);
+  // std::cout << "Total difference: " << normdiffs << "\n";
 
   // The content of the first block in Fk is set in the loop using the
   // assembled force vector and the copy Ao of the stiffness matrix.
