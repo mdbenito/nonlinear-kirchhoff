@@ -32,4 +32,4 @@ project_rhs = inner(w, g)*dx
 
 # Items to export 
 #elements = [p26element, dktelement, project_element, cg1element]
-forms = [p26, dkt, force, beta, project_lhs, project_rhs, bih]
+forms = [p26, dkt, force, beta, project_lhs, project_rhs]
