@@ -393,7 +393,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
     Ao->mult(*dtY, tmp);
     auto nr = std::sqrt(tmp.inner(*dtY));
     std::cout << "norm of \\nabla theta_h dtY =  " << nr << "\n";
-    stop = nr < eps || nr > 1;  // FIXME: if nr > 1 we are diverging...
+    stop = nr < eps || nr > 1;  // FIXME: if nr > 1 we are diverging (?)
     table("Stopping condition", "time") =
       table.get_value("Stopping condition", "time") + toc();
 
@@ -406,15 +406,15 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
     energy_values.push_back(energy);
     if (step > 2) {
       double prev = *(energy_values.end()-2);
-      std::cout << "Energy change: " << 100*(energy - prev)/prev << "%\n";
-      // check unconditional stability:
-      std::cout << "This step is " << (energy+tau*nr*nr <= prev ? "OK" : "WRONG")
-                << ".\n";
+      std::cout << "Energy change: " << 100*(energy - prev)/prev << "% ("
+                // check unconditional stability:
+                << (energy+tau*nr*nr <= prev ? "OK" : "WRONG") << ").\n";
     }
-    
+
     if(std::floor(step / adaptive_steps) > dec_ctr) {
       dec_ctr = std::floor(step / adaptive_steps);
       tau *= adaptive_factor;
+      std::cout << "Corrected tau = " << tau << "\n";
       file << y;  // output current solution
     }
 
@@ -448,18 +448,35 @@ main(int argc, char** argv)
   bool help = false;
   sweet::Options opt(argc, const_cast<char**>(argv),
                      "Nonlinear Kirchhoff model on the unit square.");
-  opt.get("-h", "--help", "Show this help", help);
-  opt.get("-v", "--verbose", "Debug verbosity level, 0: no output, ... 3: write data files with vectors and matrices", NLK::DEBUG);
-  opt.get("-m", "--num_vertical", "number of vertical subdivisions", m);
-  opt.get("-n", "--num_horizontal", "number of horizontal subdivisions", n);
-  opt.get("-d", "--diagonal", "Direction of diagonals: \"left\", \"right\", \"left/right\", \"crossed\"", diagonal);
-  opt.get("-a", "--alpha", "alpha", alpha);
-  opt.get("-t", "--tau", "timestep *scaling* wrt. minimal cell size", tau);
-  opt.getMultiple("-c", "--correction", "Adaptive parameters for tau (number of timesteps, multiplier)", adaptive);
-  opt.get("-x", "--max_steps", "Maximum number of time steps", max_steps);
-  opt.get("-e", "--eps_stop", "Stopping threshold.", eps);
-  opt.get("-p", "--pause", "Pause each worker for so many seconds before starting, in order to attach a debugger", pause);
-  opt.get("-T", "--test", "Run the specified test", test);
+  opt.get("-h", "--help",
+          "Show this help", help);
+  opt.get("-v", "--verbose",
+          "Debug verbosity level, 0: no output, ... 3: output vectors and matrices",
+          NLK::DEBUG);
+  opt.get("-m", "--num_vertical",
+          "number of vertical subdivisions", m);
+  opt.get("-n", "--num_horizontal",
+          "number of horizontal subdivisions", n);
+  opt.get("-d", "--diagonal",
+          "Direction of diagonals: \"left\", \"right\", \"left/right\", \"crossed\"",
+          diagonal);
+  opt.get("-a", "--alpha",
+          "Constant scaling of the bending energy", alpha);
+  opt.get("-t", "--tau",
+          "Scaling of the timestep wrt. minimal cell size", tau);
+  opt.getMultiple("-c", "--correction",
+                  "Adaptive parameters for tau (number of timesteps, multiplier)",
+                  adaptive);
+  opt.get("-x", "--max_steps",
+          "Maximum number of time steps", max_steps);
+  opt.get("-e", "--eps_stop",
+          "Stopping threshold.", eps);
+  opt.get("-p", "--pause",
+          "Pause each worker for so many seconds in order to attach a debugger",
+          pause);
+  opt.get("-s", "--test",
+          "Run the specified test (dofs, blockvector)", test);
+
   if (opt.help_requested())
     return 1;
 
