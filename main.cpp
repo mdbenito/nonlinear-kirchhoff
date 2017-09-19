@@ -21,7 +21,7 @@ using namespace dolfin;
 namespace NLK { using namespace NonlinearKirchhoff; }
 
 const double LEFT = -2.0, RIGHT = 2.0, BOTTOM = 0.0, TOP = 1.0;
-  
+
 class Force : public Expression
 {
   void eval(Array<double>& values, const Array<double>& x) const
@@ -147,10 +147,10 @@ discrete_energy(double alpha,
 }
 
 bool
-test_bc(const SubDomain& subdomain, const Function& u, const Function& bc)
+equal_at_p(const SubDomain& subdomain, const Function& u, const Function& v)
 {
   /// Extract info and ensure the mesh (connectivity) has been initialised
-  auto W = bc.function_space();
+  auto W = v.function_space();
   auto dm = W->dofmap();
   auto mesh = W->mesh();
   auto D = mesh->topology().dim();
@@ -188,15 +188,14 @@ test_bc(const SubDomain& subdomain, const Function& u, const Function& bc)
                    });
     // Test values for facet
     la_index numrows = facet_dofs.size();
-    std::vector<double> uvalues(numrows), bcvalues(numrows);
+    std::vector<double> uvalues(numrows), vvalues(numrows);
     u.vector()->get(uvalues.data(), numrows, facet_dofs.data());
-    bc.vector()->get(bcvalues.data(), numrows, facet_dofs.data());
-    if (uvalues != bcvalues)
+    v.vector()->get(vvalues.data(), numrows, facet_dofs.data());
+    if (uvalues != vvalues)
       return false;
   }
   return true;
 }
-
 
 /// Does the magic.
 ///
@@ -204,9 +203,9 @@ test_bc(const SubDomain& subdomain, const Function& u, const Function& bc)
 ///   alpha: Factor multiplying the bending energy term
 ///   tau: time step size
 ///   max_steps: stop after at most so many iterations
-///   eps: stop after the gradient of the solution changes by
-///        at most so much (TODO)
-/// TODO: allow an adaptive step size policy
+///   eps: stop after the gradient of the solution changes by at most so much
+///   adaptive_steps: change time step size every so many steps
+///   adaptive_factor: change step size by this factor
 int
 dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
         double tau, double adaptive_steps, double adaptive_factor)
@@ -441,7 +440,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
 
     y.vector()->axpy(tau, *dtY);  // y = y + tau*dty
     std::cout << "Testing boundary conditions... "
-              << (test_bc(*bdry, y, *y0) ? "OK." : "WRONG!!!")
+              << (equal_at_p(*bdry, y, *y0) ? "OK." : "WRONG!!!")
               << "\n";
     
     double energy = discrete_energy(alpha, Ao, y, L); 
