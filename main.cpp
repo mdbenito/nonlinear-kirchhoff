@@ -391,7 +391,7 @@ main(int argc, char** argv)
   int pause = 0;
   std::string diagonal = "right";
   std::string test = "none";
-  std::vector<double> adaptive{100, 0.9};  // every 100 steps: tau *= 0.9
+  std::vector<double> adaptive;  // scale tau every x steps by a factor y
   bool help = false;
   sweet::Options opt(argc, const_cast<char**>(argv),
                      "Nonlinear Kirchhoff model on the unit square.");
@@ -430,6 +430,9 @@ main(int argc, char** argv)
   // In the paper the triangulation consists of halved squares and tau
   // is 2^{-1/2} times the length of the sides i.e. hmin() in our case
   tau *= mesh->hmin();
+  // Set default values:
+  if (adaptive.size() < 1) adaptive.push_back(100);
+  if (adaptive.size() < 2) adaptive.push_back(0.9);
   double adaptive_steps = adaptive[0];  // decrease tau every so many steps
   double adaptive_factor = adaptive[1]; // by such a multiplier
   
