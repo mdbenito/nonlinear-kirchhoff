@@ -84,9 +84,10 @@ namespace NLK {
   }
 
   void dump_full_tensor(std::shared_ptr<const dolfin::GenericVector> A,
-                        int precision, const std::string& name, bool asfile, bool force)
+                        int precision, const std::string& name,
+                        bool asfile, bool force)
   {
-    return dump_full_tensor(*A, precision, name, asfile);
+    return dump_full_tensor(*A, precision, name, asfile, force);
   }
 
   void dump_raw_matrix(const double* A, int m, int n, int precision,
