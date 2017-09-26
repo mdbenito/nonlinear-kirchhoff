@@ -504,7 +504,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
     Ao->mult(*dtY, tmp);
     auto nr = std::sqrt(tmp.inner(*dtY));
     std::cout << "norm of \\nabla theta_h dtY =  " << nr << "\n";
-    stop = nr < eps || nr > 1;  // FIXME: if nr > 1 we are diverging (?)
+    stop = nr < eps; // || nr > 1;  // FIXME: if nr > 1 we are diverging (?)
     table("Stopping condition", "time") =
       table.get_value("Stopping condition", "time") + toc();
 
