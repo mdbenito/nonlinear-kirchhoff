@@ -313,7 +313,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
   
   auto& v = *(y0->vector());
   round_zeros(v);  // This modifies y0
-  NLK::dump_full_tensor(v, 4, "y0.data");
+  NLK::dump_full_tensor(v, 6, "y0.data", true, true);
 
   ////////////////////////////////////////////////////////////////////
   // Assembly of system matrix
@@ -345,7 +345,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
 
   /// Lower right block
   auto paddingMat = Bk.get_padding();
-  NLK::dump_full_tensor(*paddingMat, 12, "D.data");
+  // NLK::dump_full_tensor(*paddingMat, 12, "D.data");
   
   auto block_Mk = std::make_shared<BlockMatrix>(2, 2);
   block_Mk->set_block(0, 0, A);
@@ -519,17 +519,18 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
       double prev = *(energy_values.end()-2);
       std::cout << "Energy change: " << 100*(energy - prev)/prev << "% ("
                 // check unconditional stability:
-                << (energy+tau*nr*nr <= prev ? "OK" : "WRONG") << ").\n";
+                << ((energy + tau*nr*nr <= prev) ? "OK" : "WRONG") << ").\n";
     }
 
     if(std::floor(step / adaptive_steps) > dec_ctr) {
       dec_ctr = std::floor(step / adaptive_steps);
       tau *= adaptive_factor;
       std::cout << "Corrected tau = " << tau << "\n";
-      file << y;  // output current solution
+      
+      // output current solution
+      file << y;
+      NLK::dump_full_tensor(y.vector(), 12, "yk.data", true, true);
     }
-
-    NLK::dump_full_tensor(y.vector(), 12, "yk.data");
   }
   NLK::dump_raw_matrix(energy_values, 1, energy_values.size(), 14,
                        "energy.data", true, true);
