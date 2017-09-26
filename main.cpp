@@ -146,6 +146,75 @@ discrete_energy(double alpha,
   return energy;
 }
 
+/// Hack to initialise the boundary condition to what we need
+void
+hack_values(const SubDomain& subdomain, Function& u)
+{
+  /// Extract info and ensure the mesh (connectivity) has been initialised
+  auto W = u.function_space();
+  // for (int i=0; i < 3; ++i)
+  //   dms.push_back(std::move(W[i]->dofmap()));
+  // auto dm = W->dofmap();
+  auto mesh = W->mesh();
+  auto D = mesh->topology().dim();
+  mesh->init(D);
+  mesh->init(D - 1);
+  mesh->init(D - 1, D);
+  
+  /// Build mesh function using the SubDomain and iterate facets using it
+  /// (TODO: there must be some other way)
+  FacetFunction<std::size_t> subdomains(mesh, 1);
+  subdomain.mark(subdomains, 42, false);  // don't check midpoints
+
+  /// This is *very* inefficient...
+  for (int sub = 0; sub < 3; ++sub) {
+    auto dm = (*W)[sub]->dofmap();
+    for (FacetIterator facet(*mesh); !facet.end(); ++facet) {
+      if (subdomains[*facet] != 42)   // nothing to do
+        continue;
+
+      // Get cell to which facet belongs and local index.
+      dolfin_assert(facet.num_entities(D) > 0);
+      auto cell_index = facet->entities(D)[0];
+      Cell cell(*mesh, cell_index);
+      auto facet_local_index = cell.index(*facet);
+
+      // local-global dof mapping for cell
+      auto cell_dofs = dm->cell_dofs(cell.index());
+      // local-local dof mapping of dofs on the facet
+      std::vector<std::size_t> local_facet_dofs;
+      dm->tabulate_facet_dofs(local_facet_dofs, facet_local_index);
+      // local-global mapping for facet dofs
+      // Vector::get() doesn't like size_t... duh!
+      std::vector<la_index> facet_dofs(local_facet_dofs.size());
+      std::transform(local_facet_dofs.begin(), local_facet_dofs.end(),
+                     facet_dofs.begin(),
+                     [&cell_dofs] (std::size_t& dof) {
+                       return static_cast<la_index>(cell_dofs[dof]);
+                     });
+      // Test values for facet
+      la_index numrows = facet_dofs.size();
+      std::vector<double> uvalues(numrows);
+      u.vector()->get(uvalues.data(), numrows, facet_dofs.data());
+      for(auto i = 0; i < numrows; ++i) {  // 6 values per facet and subspace
+        // std::cout << "ldof " << i << ", vdof " << i % 3  << ", gdof "
+        //           << facet_dofs[i] << "\n";
+        switch (i % 3) {
+        case 0:
+          if (sub == 0)
+            uvalues[i] = uvalues[i] < 0 ? -0.6 : 0.6;
+              break;
+        case 1: uvalues[i] = (sub == 0) ? 1.0 : 0.0; break;
+        case 2: uvalues[i] = (sub == 1) ? 1.0 : 0.0; break;
+        }
+      }
+      u.vector()->set(uvalues.data(), numrows, facet_dofs.data());
+    }
+  }
+}
+
+  
+
 bool
 equal_at_p(const SubDomain& subdomain, const Function& u, const Function& v)
 {
@@ -238,6 +307,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
   tic();
   // Initial data: careful that it fulfils the BCs.
   auto y0 = project_dkt(std::make_shared<BoundaryData>(), W3);
+  hack_values(*bdry, *y0);
   table("Projection of data", "time") = toc();
   std::cout << "Done.\n";
   
