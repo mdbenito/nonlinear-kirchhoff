@@ -54,16 +54,21 @@ class BoundaryData : public Expression
 {
   void eval(Array<double>& values, const Array<double>& x) const
   {
-    values[0] = x[0] * 0.3;  // Strong lateral compression
+    // FIXME: write proper extension to an initial value which makes sense
+    // Strong lateral compression
+    values[0] = x[0] * 0.3;
     values[1] = x[1];
-    values[2] = 0;
+    values[2] = 1 - (x[0]*x[0])/2 + std::pow(x[0]/2, 4);
   }
   std::size_t value_rank() const { return 1; }
   std::size_t value_dimension(std::size_t i) const { return 3;}
 };
 
 
-///  Projects a GenericFunction, which should be in a P^3x2 space onto
+
+/// FIXME! This seems not to work properly!
+
+/// Projects a GenericFunction, which should be in a P^3x2 space onto
 /// the given FunctionSpace, which should be DKT.  In order for this
 /// to be general, I'd need to prepare a variational problem here and
 /// compile it on the fly with ffc, etc. instead of "hardcoding" stuff
