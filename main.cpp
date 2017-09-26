@@ -113,6 +113,42 @@ round_zeros(GenericVector& v, double precision=1e-6)
     v.set_local(block.data(), numrows, rows.data());
 }
 
+std::unique_ptr<std::vector<la_index>>
+nodal_indices(std::shared_ptr<const FunctionSpace> W3)
+{
+  int N = W3->dim() / 3;
+  std::unique_ptr<std::vector<la_index>> indices(new std::vector<la_index>(N));
+  auto v2d = vertex_to_dof_map(*W3);
+  for (VertexIterator v(*(W3->mesh())); !v.end(); ++v) {
+    // The following should be a process-local index
+    auto idx = static_cast<la_index>(v->index());
+    for (int sub = 0; sub < 3; ++sub) {     // iterate over the 3 subspaces
+      auto dof = v2d[9*idx + 3*sub];
+      indices->push_back(dof);
+    }
+  }
+  return indices;
+}
+
+double
+dkt_inner(std::shared_ptr<const GenericVector> v1,
+          std::shared_ptr<const GenericVector> v2,
+          std::shared_ptr<const FunctionSpace> W3)
+{
+  assert(v1->size() == v2->size());
+  const auto& indices = nodal_indices(W3);  // FIXME: call only once!
+  std::vector<double> vals1(indices->size()), vals2(indices->size());
+  v1->get_local(vals1.data(), indices->size(), indices->data());
+  v2->get_local(vals2.data(), indices->size(), indices->data());  
+
+  return std::inner_product(vals1.begin(), vals1.end(), vals2.begin(), 0.0);
+}
+
+double
+dkt_inner(const Function& f1, const Function& f2)
+{
+  return dkt_inner(f1.vector(), f2.vector(), f1.function_space());
+}
 
 double
 discrete_energy(double alpha,
@@ -137,26 +173,7 @@ discrete_energy(double alpha,
   // hermite mapping is missing in
   // apply_single_function_pullbacks.py). Because they are constant,
   // we just ignore them. 
-
-  const auto& v1 = y.vector();
-  const auto& v2 = L.vector();
-  assert(v1->size() == v2->size());
-
-  const auto& W3 = y.function_space();
-  std::vector<la_index> indices;
-  auto v2d = vertex_to_dof_map(*W3);
-  for (VertexIterator v(*(W3->mesh())); !v.end(); ++v) {
-    // The following should be a process-local index
-    auto idx = static_cast<la_index>(v->index());
-    for (int sub = 0; sub < 3; ++sub) {     // iterate over the 3 subspaces
-      auto dof = v2d[9*idx + 3*sub];
-      indices.push_back(dof);
-    }
-  }
-  std::vector<double> vals1(indices.size()), vals2(indices.size());
-  v1->get_local(vals1.data(), indices.size(), indices.data());
-  v2->get_local(vals2.data(), indices.size(), indices.data());  
-  energy += std::inner_product(vals1.begin(), vals1.end(), vals2.begin(), 0.0);
+  energy += dkt_inner(y, L);
   return energy;
 }
 
@@ -510,7 +527,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
     table("Solution", "time") =
       table.get_value("Solution", "time") + toc();
     std::cout << "Done with norm = "
-              << norm(*(dtY_L.get())) << "\n";
+              << std::sqrt(dkt_inner(dtY_L.get(), dtY_L.get(), W3)) << "\n";
     NLK::dump_full_tensor(dtY_L.get(), 12, "dtY_L.data");
 
     std::cout << "Testing whether we should stop... ";
