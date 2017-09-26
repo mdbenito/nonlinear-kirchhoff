@@ -46,7 +46,7 @@ class LateralBoundary : public SubDomain
 {
   bool inside(const Array<double>& x, bool on_boundary) const
   {
-    return near(x[0], LEFT) || near(x[0], RIGHT);
+    return on_boundary && (near(x[0], LEFT) || near(x[0], RIGHT));
   }
 };
 
