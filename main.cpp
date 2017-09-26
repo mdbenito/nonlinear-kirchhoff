@@ -141,13 +141,22 @@ discrete_energy(double alpha,
   const auto& v1 = y.vector();
   const auto& v2 = L.vector();
   assert(v1->size() == v2->size());
-  // take only coefficients for evaluations
-  for (int j = 0; j < v1->size(); j+=3) {
-    double val1(0), val2(0);
-    v1->get_local(&val1, 1, &j);
-    v2->get_local(&val2, 1, &j);
-    energy += val1 * val2;
+
+  const auto& W3 = y.function_space();
+  std::vector<la_index> indices;
+  auto v2d = vertex_to_dof_map(*W3);
+  for (VertexIterator v(*(W3->mesh())); !v.end(); ++v) {
+    // The following should be a process-local index
+    auto idx = static_cast<la_index>(v->index());
+    for (int sub = 0; sub < 3; ++sub) {     // iterate over the 3 subspaces
+      auto dof = v2d[9*idx + 3*sub];
+      indices.push_back(dof);
+    }
   }
+  std::vector<double> vals1(indices.size()), vals2(indices.size());
+  v1->get_local(vals1.data(), indices.size(), indices.data());
+  v2->get_local(vals2.data(), indices.size(), indices.data());  
+  energy += std::inner_product(vals1.begin(), vals1.end(), vals2.begin(), 0.0);
   return energy;
 }
 
