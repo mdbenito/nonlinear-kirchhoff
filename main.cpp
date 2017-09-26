@@ -480,7 +480,8 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
   BlockVectorAdapter dtY_L(block_dtY_L);
   
   Function y(*y0);  // Deformation y_{k+1}, begin with initial condition
-
+  DKTGradient DG;
+  
   ////////////////////////////////////////////////////////////////////
   // Main loop
   
@@ -534,7 +535,9 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
     tic();
     Ao->mult(*dtY, tmp);
     auto nr = std::sqrt(tmp.inner(*dtY));
-    std::cout << "norm of \\nabla theta_h dtY =  " << nr << "\n";
+    std::shared_ptr<const GenericVector> gr(std::move(DG.apply_vec(T3, W3, dtY)));
+    auto nr2 = std::sqrt(dkt_inner(gr, gr, W3));
+    std::cout << "norm of \\nabla theta_h dtY =  " << nr << " -- " << nr2 << "\n";
     stop = nr < eps; // || nr > 1;  // FIXME: if nr > 1 we are diverging (?)
     table("Stopping condition", "time") =
       table.get_value("Stopping condition", "time") + toc();
