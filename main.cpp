@@ -321,7 +321,9 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
   tic();
   // Initial data: careful that it fulfils the BCs.
   auto y0 = project_dkt(std::make_shared<BoundaryData>(), W3);
-  hack_values(*bdry, *y0);
+  // CAREFUL!! The discontinuities introduced by this propagate and
+  // crumple the solution!! Or so it seems...
+  // hack_values(*bdry, *y0);
   table("Projection of data", "time") = toc();
   std::cout << "Done.\n";
   
