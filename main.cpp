@@ -54,14 +54,32 @@ class BoundaryData : public Expression
 {
   void eval(Array<double>& values, const Array<double>& x) const
   {
-    // FIXME: write proper extension to an initial value which makes sense
-    // Strong lateral compression
-    values[0] = x[0] * 0.3;
+    const double pi6 = M_PI / 6;
+    const double pi3 = M_PI / 3;
+    const double pi2 = M_PI / 2;
+    
+    double t = x[0];
     values[1] = x[1];
-    values[2] = 1 - (x[0]*x[0])/2 + std::pow(x[0]/2, 4);
+
+    if (-2.0 <= t && t < -2.0 + pi6) {
+      values[0] = -2.0/3.0 + (1.0/3) * std::cos(3.0*(t+2.0)-pi2);
+      values[2] =  1.0/3.0 + (1.0/3) * std::sin(3.0*(t+2.0)-pi2);
+    } else if (-2.0 + pi6 <= t && t < -pi6) {
+      values[0] = -1.0/3.0;
+      values[2] =  1.0/3.0-t-pi6;
+    } else if (-pi6 <= t && t < pi6) {
+      values[0] =               0 + (1.0/3.0) * std::cos(M_PI - 3.0*(t+pi6));
+      values[2] = 1.0/3.0+2.0-pi3 + (1.0/3.0) * std::sin(3.0*(t+pi6));
+    } else if (pi6 <= t && t < 2.0 - pi6) {
+      values[0] = 1.0/3.0;
+      values[2] = 1.0/3.0+t-pi6;
+    } else if (2.0 - pi6 <= t && t <= 2.0 ) {
+      values[0] = 2.0/3.0 + (1.0/3.0)*std::cos(3.0*(t-2.0+pi6)+M_PI);
+      values[2] = 1.0/3.0 + (1.0/3.0)*std::sin(3.0*(t-2.0+pi6)+M_PI);
+    }      
   }
   std::size_t value_rank() const { return 1; }
-  std::size_t value_dimension(std::size_t i) const { return 3;}
+  std::size_t value_dimension(std::size_t i) const { return 3; }
 };
 
 
@@ -338,7 +356,9 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
   tic();
   // Initial data: careful that it fulfils the BCs.
   auto y0 = project_dkt(std::make_shared<BoundaryData>(), W3);
-  hack_values(*bdry, *y0);
+  // CAREFUL!! The discontinuities introduced by this propagate and
+  // crumple the solution!! Or so it seems...
+  // hack_values(*bdry, *y0);
   table("Projection of data", "time") = toc();
   std::cout << "Done.\n";
   
