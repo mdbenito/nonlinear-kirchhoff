@@ -66,13 +66,13 @@ class BoundaryData : public Expression
       values[2] =  1.0/3.0 + (1.0/3) * std::sin(3.0*(t+2.0)-pi2);
     } else if (-2.0 + pi6 <= t && t < -pi6) {
       values[0] = -1.0/3.0;
-      values[2] =  1.0/3.0-t-pi6;
+      values[2] =  1.0/3.0 + t - (-2.0 + pi6);
     } else if (-pi6 <= t && t < pi6) {
       values[0] =               0 + (1.0/3.0) * std::cos(M_PI - 3.0*(t+pi6));
       values[2] = 1.0/3.0+2.0-pi3 + (1.0/3.0) * std::sin(3.0*(t+pi6));
     } else if (pi6 <= t && t < 2.0 - pi6) {
       values[0] = 1.0/3.0;
-      values[2] = 1.0/3.0+t-pi6;
+      values[2] = 1.0/3.0 + 2.0 - pi3 - t + pi6;
     } else if (2.0 - pi6 <= t && t <= 2.0 ) {
       values[0] = 2.0/3.0 + (1.0/3.0)*std::cos(3.0*(t-2.0+pi6)+M_PI);
       values[2] = 1.0/3.0 + (1.0/3.0)*std::sin(3.0*(t-2.0+pi6)+M_PI);
