@@ -52,6 +52,7 @@ class LateralBoundary : public SubDomain
 
 class BoundaryData : public Expression
 {
+public: 
   void eval(Array<double>& values, const Array<double>& x) const
   {
     const double pi6 = M_PI / 6;
@@ -78,10 +79,74 @@ class BoundaryData : public Expression
       values[2] = 1.0/3.0 + (1.0/3.0)*std::sin(3.0*(t-2.0+pi6)+M_PI);
     }      
   }
+
+  /// Gradient is stored in row format: f_11, f_12, f_21, f_22, f_31, f_32
+  void gradient(Array<double>& grad, const Array<double>& x) const
+  {
+    const double pi6 = M_PI / 6;
+    const double pi3 = M_PI / 3;
+    const double pi2 = M_PI / 2;
+    
+    double t = x[0];
+    grad[1] = grad[2] = grad[5] = 0;
+    grad[3] = 1;
+    if (-2.0 <= t && t < -2.0 + pi6) {
+      grad[0] = - std::sin(3.0*(t+2.0)-pi2);
+      grad[4] =   std::cos(3.0*(t+2.0)-pi2);
+    } else if (-2.0 + pi6 <= t && t < -pi6) {
+      grad[0] = 0;
+      grad[4] = 1;
+    } else if (-pi6 <= t && t < pi6) {
+      grad[0] = std::sin(M_PI - 3.0*(t+pi6));
+      grad[4] = std::cos(3.0*(t+pi6));
+    } else if (pi6 <= t && t < 2.0 - pi6) {
+      grad[0] = 0;
+      grad[4] = -1;
+    } else if (2.0 - pi6 <= t && t <= 2.0 ) {
+      grad[0] = - std::sin(3.0*(t-2.0+pi6)+M_PI);
+      grad[4] = std::cos(3.0*(t-2.0+pi6)+M_PI);
+    }
+  }
+    
   std::size_t value_rank() const { return 1; }
   std::size_t value_dimension(std::size_t i) const { return 3; }
 };
 
+std::unique_ptr<Function>
+eval_dkt(std::shared_ptr<const BoundaryData> fexp,
+         std::shared_ptr<const FunctionSpace> W3)
+{
+  auto mesh = W3->mesh();
+  std::vector<la_index> evdofs, dxdofs, dydofs;
+  std::vector<double> evvals, dxvals, dyvals;
+  Array<double> values(3), grad(6);
+  auto v2d = vertex_to_dof_map(*W3);
+  for (VertexIterator vit(*mesh); !vit.end(); ++vit) {
+    fexp->eval(values, Array<double>(2, const_cast<double*>(vit->x())));
+    fexp->gradient(grad, Array<double>(2, const_cast<double*>(vit->x())));
+    for (int sub=0; sub < 3; ++sub) {
+      // The following should be a process-local index
+      auto idx = static_cast<la_index>(vit->index());
+      auto dofev = v2d[9*idx + 3*sub + 0];
+      auto dofdx = v2d[9*idx + 3*sub + 1];
+      auto dofdy = v2d[9*idx + 3*sub + 2];
+      evdofs.push_back(dofev);
+      dxdofs.push_back(dofdx);
+      dydofs.push_back(dofdy);
+
+      evvals.push_back(values[sub]);
+      dxvals.push_back(grad[2*sub]);
+      dyvals.push_back(grad[2*sub+1]);
+    }
+  }
+
+  std::unique_ptr<Function> f(new Function(W3));
+  f->vector()->set(evvals.data(), evdofs.size(), evdofs.data());
+  f->vector()->set(dxvals.data(), dxdofs.size(), dxdofs.data());
+  f->vector()->set(dyvals.data(), dydofs.size(), dydofs.data());
+
+  return f;
+}
 
 
 /// FIXME! This seems not to work properly!
@@ -195,9 +260,72 @@ discrete_energy(double alpha,
   return energy;
 }
 
+void
+hack_values(Function& y)
+{
+  auto W3 = y.function_space();
+  auto mesh = W3->mesh();
+  std::vector<la_index> dxdofs, dydofs;
+  auto v2d = vertex_to_dof_map(*W3);
+  for (int sub=0; sub < 3; ++sub) {
+    // auto dm = (*W3)[sub]->dofmap();
+    // The following should be a process-local index
+    for (VertexIterator vit(*mesh); !vit.end(); ++vit) {
+      auto idx = static_cast<la_index>(vit->index());
+      auto dofdx = v2d[9*idx + 3*sub + 1];
+      auto dofdy = v2d[9*idx + 3*sub + 2];
+      dxdofs.push_back(dofdx);
+      dydofs.push_back(dofdy);
+    }
+  }
+  std::vector<double> dx(dxdofs.size()), dy(dydofs.size());
+  size_t ctr = 0;
+  std::generate(dx.begin(), dx.end(), [&ctr]() { return (ctr++ % 3 == 0) ? 1.0 : 0.0; });
+  ctr = 0;
+  std::generate(dy.begin(), dy.end(), [&ctr]() { return (ctr++ % 3 == 1) ? 1.0 : 0.0; });
+  y.vector()->set(dx.data(), dxdofs.size(), dxdofs.data());
+  y.vector()->set(dy.data(), dydofs.size(), dydofs.data());
+}
+
+// compute |nablaT y nabla y - id|
+// FIXME!! I'm computing average distance across all vertices instead
+// of integrating
+double
+distance_to_isometry(Function& y)
+{
+  auto W3 = y.function_space();
+  auto mesh = W3->mesh();
+  std::vector<la_index> dxdofs, dydofs;
+  auto v2d = vertex_to_dof_map(*W3);
+  for (int sub=0; sub < 3; ++sub) {
+    // auto dm = (*W3)[sub]->dofmap();
+    // The following should be a process-local index
+    for (VertexIterator vit(*mesh); !vit.end(); ++vit) {
+      auto idx = static_cast<la_index>(vit->index());
+      auto dofdx = v2d[9*idx + 3*sub + 1];
+      auto dofdy = v2d[9*idx + 3*sub + 2];
+      dxdofs.push_back(dofdx);
+      dydofs.push_back(dofdy);
+    }
+  }
+  std::vector<double> dx(dxdofs.size()), dy(dydofs.size());
+  y.vector()->get(dx.data(), dxdofs.size(), dxdofs.data());
+  y.vector()->get(dy.data(), dydofs.size(), dydofs.data());
+  
+  double dxdx = std::inner_product(dx.begin(), dx.end(), dx.begin(), 0),
+         dxdy = std::inner_product(dx.begin(), dx.end(), dy.begin(), 0),
+         dydy = std::inner_product(dy.begin(), dy.end(), dy.begin(), 0);
+  // subtract identity at each vertex
+  auto N = mesh->num_vertices();
+  double frobsq = (std::pow(dxdx - N, 2) +
+                   std::pow(dydy - N, 2) +
+                   2*std::pow(dxdy, 2)) / N;
+  return std::sqrt(frobsq);
+}
+
 /// Hack to initialise the boundary condition to what we need
 void
-hack_values(const SubDomain& subdomain, Function& u)
+hack_boundary_values(const SubDomain& subdomain, Function& u)
 {
   /// Extract info and ensure the mesh (connectivity) has been initialised
   auto W = u.function_space();
@@ -261,8 +389,6 @@ hack_values(const SubDomain& subdomain, Function& u)
     }
   }
 }
-
-  
 
 bool
 equal_at_p(const SubDomain& subdomain, const Function& u, const Function& v)
@@ -355,10 +481,11 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
   std::cout << "Projecting initial data onto W^3... ";
   tic();
   // Initial data: careful that it fulfils the BCs.
-  auto y0 = project_dkt(std::make_shared<BoundaryData>(), W3);
+  auto y0 = eval_dkt(std::make_shared<BoundaryData>(), W3);
   // CAREFUL!! The discontinuities introduced by this propagate and
   // crumple the solution!! Or so it seems...
-  // hack_values(*bdry, *y0);
+  // hack_boundary_values(*bdry, *y0);
+  // hack_values(*y0);
   table("Projection of data", "time") = toc();
   std::cout << "Done.\n";
   
@@ -566,6 +693,8 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
     std::cout << "Testing boundary conditions... "
               << (equal_at_p(*bdry, y, *y0) ? "OK." : "WRONG!!!")
               << "\n";
+    std::cout << "Distance to isometry: "
+              << distance_to_isometry(y) << "\n";
     
     double energy = discrete_energy(alpha, Ao, y, L); 
     energy_values.push_back(energy);
