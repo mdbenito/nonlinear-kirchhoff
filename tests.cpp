@@ -1,6 +1,11 @@
 #include <vector>
 #include <numeric>
+#include <iostream>
+#include <iomanip>
+#include <memory>
 #include <dolfin.h>
+
+#include "DKTGradient.h"
 #include "tests.h"
 #include "output.h"
 #include "NonlinearKirchhoff.h"
@@ -109,3 +114,100 @@ test_BlockVectorAdapter()
   return 0;
 }
 
+/* Python code to produce cc, p22tensor, M, D:
+from dolfin import *
+import nbimporter
+from discrete_gradient import DKTCellGradient
+import numpy as np
+np.set_printoptions(precision=2, linewidth=120)
+
+domain = UnitSquareMesh(1,1)
+V = VectorFunctionSpace(domain, "Lagrange", dim=2, degree=2)
+u = TrialFunction(V)
+v = TestFunction(V)
+
+a = inner(nabla_grad(u), nabla_grad(v))*dx
+A = assemble(a)
+
+grad = DKTCellGradient()
+Aa = A.array()
+A2 = np.zeros((12,12))
+dm = V.dofmap()
+for cell_id in range(V.mesh().num_cells()):
+    cell = Cell(V.mesh(), cell_id)
+    print(cell.get_coordinate_dofs())
+    grad.update(cell)
+    print(grad.M)
+    print("******")
+    l2g = dm.cell_dofs(cell_id)   # local to global mapping for cell 
+    for i,j in np.ndindex(A2.shape):
+        A2[i,j] = Aa[l2g[i], l2g[j]]
+    print(A2)
+    print("=============")
+    print(grad.M.transpose() @ A2 @ grad.M)
+*/
+int
+testDKT(void)
+{
+  DKTGradient dg;
+  DKTGradient::P3Tensor D;
+
+  std::vector<double> cc = {0,0,1,0,1,1};
+  DKTGradient::P22Vector p22coeffs;
+  DKTGradient::P3Vector p3rcoeffs = {1,0,0,0,0,0,0,0,0};
+  dg.update(cc);
+  dg.apply_vec(p3rcoeffs, p22coeffs);
+
+//  std::vector<double> M_result = {
+//    0.,    1.     0.,    0.,    0.,    0.,    0.,    0.,    0.,  
+//    0.,    0.,    1.,    0.,    0.,    0.,    0.,    0.,    0.,  
+//    0.,    0.,    0.,    0.,    1.,    0.,    0.,    0.,    0.,  
+//    0.,    0.,    0.,    0.,    0.,    1.,    0.,    0.,    0.,  
+//    0.,    0.,    0.,    0.,    0.,    0.,    0.,    1.,    0.,  
+//    0.,    0.,    0.,    0.,    0.,    0.,    0.,    0.,    1.,  
+//    0.,    0.,    0.,   -0.,    0.5,   0.,    0.,    0.5,   0.,  
+//    0.,    0.,    0.,   -1.5,   0.,   -0.25,  1.5,   0.,   -0.25,
+//   -0.75,  0.13, -0.37,  0.,    0.,    0.,    0.75,  0.13, -0.37,
+//   -0.75, -0.37,  0.13,  0.,    0.,    0.,    0.75, -0.37,  0.13,
+//   -1.5,  -0.25,  0.,    1.5,  -0.25,  0.,    0.,    0.,    0.,  
+//   -0.,    0.,    0.5,   0.,    0.,    0.5,   0.,    0.,    0. };
+  
+  std::vector<double> p22tensor = {
+     1.  ,  0.17,  0.  ,  0.  ,  0.  , -0.67,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,
+     0.17,  1.  ,  0.17, -0.67,  0.  , -0.67,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,
+     0.  ,  0.17,  1.  , -0.67,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,
+     0.  , -0.67, -0.67,  2.67, -1.33,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,
+     0.  ,  0.  ,  0.  , -1.33,  5.33, -1.33,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,
+    -0.67, -0.67,  0.  ,  0.  , -1.33,  2.67,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,
+     0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  1.  ,  0.17,  0.  ,  0.  ,  0.  , -0.67,
+     0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.17,  1.  ,  0.17, -0.67,  0.  , -0.67,
+     0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.17,  1.  , -0.67,  0.  ,  0.  ,
+     0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  , -0.67, -0.67,  2.67, -1.33,  0.  ,
+     0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  , -1.33,  5.33, -1.33,
+     0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  , -0.67, -0.67,  0.  ,  0.  , -1.33,  2.67 };
+
+  dg.apply(p22tensor, D);
+
+  std::vector<double> D_result = {
+    10.31, 1.53, 1.16-11.06, 1.75, 0.91, 0.75, -0.22, 0.06, 
+    1.53, 1.54, 0.1, -1.66, 0.21, 0.1, 0.12, 0.33, -0.97, 
+    1.16, 0.1, 1.91, -0.53, 0.21, 0.12, -0.62, -0.44, -0.3, 
+    -11.06, -1.66, -0.53, 14.25, -2.12, -0.12, -3.19, 0.22, 0.34, 
+    1.75, 0.21, 0.21, -2.12, 1.58, -0.69, 0.38, 0.12, 0.02, 
+    0.91, 0.1, 0.12, -0.12, -0.69, 3.56, -0.78, -1.59, 0.18, 
+    0.75, 0.12, -0.62, -3.19, 0.38, -0.78, 2.44, 0., -0.41, 
+    -0.22, 0.33, -0.44, 0.22, 0.12, -1.59, 0.,  6.04, -1.7, 
+    0.06, -0.97, -0.3, 0.34, 0.02, 0.18, -0.41, -1.7, 3.05 };
+
+  auto absdiff = [] (double x, double y) { return std::abs(x-y); };
+  std::transform(D.begin(), D.end(), D_result.begin(), D_result.begin(), absdiff);
+  std::accumulate(D.begin(), D.end(), std::sum<double>);
+
+  bool ok = true;
+}
+
+bool
+test_dkt_identity()
+{
+  return false;
+}
