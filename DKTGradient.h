@@ -72,6 +72,7 @@ public:
    * Works for dim > 1 ASSUMING that p22tensor is just a 12x12 chunk
    * of the actual matrix (better for KirchhoffAssembler)
    */
+  void apply(const P22Tensor& p22tensor, P3Tensor& D);
   void apply(const double* p22tensor, P3Tensor& D);
 
   /* Computes the discrete gradient of the given function.

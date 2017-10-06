@@ -1,10 +1,13 @@
 #include "dkt_utils.h"
 #include <dolfin.h>
+#include "NonlinearKirchhoff.h"
+
+namespace NLK { using namespace NonlinearKirchhoff; }
 
 namespace dolfin
 {
   std::unique_ptr<Function>
-  eval_dkt(std::shared_ptr<const BoundaryData> fexp,
+  eval_dkt(std::shared_ptr<const DiffExpression> fexp,
            std::shared_ptr<const FunctionSpace> W3)
   {
     auto mesh = W3->mesh();

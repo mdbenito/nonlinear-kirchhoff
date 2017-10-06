@@ -53,7 +53,7 @@ class LateralBoundary : public SubDomain
   }
 };
 
-class InitialData : public Expression
+class InitialData : public DiffExpression
 {
 public: 
   void eval(Array<double>& values, const Array<double>& x) const

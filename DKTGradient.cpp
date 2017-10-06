@@ -1,6 +1,7 @@
 #include <vector>
 #include <array>
 #include <cassert>
+#include <memory>
 
 #include <dolfin.h>
 #include "DKTGradient.h"
@@ -130,6 +131,12 @@ DKTGradient::update(const std::vector<double>& cc)
   permutation_hack(_M);
 
   _Mt = _M.transpose();
+}
+
+void
+DKTGradient::apply(const P22Tensor& p22tensor, P3Tensor& dkttensor)
+{
+    apply(p22tensor.data(), dkttensor);
 }
 
 void
