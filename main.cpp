@@ -689,6 +689,9 @@ main(int argc, char** argv)
     std::cout << "Running test " << test << "...\n";
     NLK::DEBUG = 3;
     return test_DKT();
+  } else if (test != "none") {
+    std::cout << "Unknown test type " << test << ".\n";
+    return 1;
   }
 
   // else...
