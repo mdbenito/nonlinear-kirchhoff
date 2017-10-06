@@ -5,13 +5,13 @@
 #include <vector>
 #include <array>
 
-namespace dolfin{
+namespace dolfin
+{
   class Cell;
   class Vector;
   class Function;
   class FunctionSpace;
   class GenericTensor;
-}
 
 /* Computes the transformation matrix for $\nabla_h$ over one cell.
 *
@@ -75,7 +75,7 @@ public:
 
   /* Computes the discrete gradient of the given function.
    *
-   * FIXME: this is VERY INNEFFICIENTLY done, cell by cell each time
+   * FIXME: this is VERY INEFFICIENTLY done, cell by cell each time
    * we are called. Instead, one could compute the global gradient
    * matrix once, then just multiply the full vector of coefficients
    * by it.
@@ -97,5 +97,6 @@ protected:
   Mt_t _Mt;  // cell-local transposed gradient matrix
   int _dim;  // range dimension
 };
+}
 
 #endif // __DKTGRADIENT_HPP

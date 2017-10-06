@@ -74,7 +74,7 @@ DKTGradient::update(const std::vector<double>& cc)
   // FIXME: shouldn't this depend on the orientation?
   tt[IJ(0,0)] = cc[IJ(2,0)] - cc[IJ(1,0)];
   tt[IJ(0,1)] = cc[IJ(2,1)] - cc[IJ(1,1)];      
-  tt[IJ(1,0)] = cc[IJ(2,0)] - cc[IJ(0,0)];  // Why is this negated?
+  tt[IJ(1,0)] = cc[IJ(2,0)] - cc[IJ(0,0)];  // FIXME: Why is this negated?
   tt[IJ(1,1)] = cc[IJ(2,1)] - cc[IJ(0,1)];
   tt[IJ(2,0)] = cc[IJ(1,0)] - cc[IJ(0,0)];
   tt[IJ(2,1)] = cc[IJ(1,1)] - cc[IJ(0,1)];
