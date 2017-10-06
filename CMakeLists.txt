@@ -94,6 +94,7 @@ add_executable(${PROJECT_NAME} ${FFC_GENERATED_SOURCES}
   BlockMatrixAdapter.cpp
   BlockVectorAdapter.cpp
   output.cpp
+  dkt_utils.cpp
   tests.cpp
   main.cpp)
 

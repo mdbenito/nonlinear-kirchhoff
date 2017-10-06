@@ -1,11 +1,12 @@
 #include <iostream>
+#include <memory>
 #include <iomanip>
 #include <numeric>
 #include <vector>
 #include <tuple>
 #include <cmath>
-#include <dolfin.h>
 #include <unistd.h>
+#include <dolfin.h>
 
 #include "NonlinearKirchhoff.h"
 #include "IsometryConstraint.h"
@@ -62,32 +63,6 @@ class BoundaryData : public Expression
   std::size_t value_dimension(std::size_t i) const { return 3;}
 };
 
-
-///  Projects a GenericFunction, which should be in a P^3x2 space onto
-/// the given FunctionSpace, which should be DKT.  In order for this
-/// to be general, I'd need to prepare a variational problem here and
-/// compile it on the fly with ffc, etc. instead of "hardcoding" stuff
-/// in the UFL file.  One should be returning unique_ptr, remember
-/// your Gurus of the week... 
-/// https://herbsutter.com/2013/05/30/gotw-90-solution-factories/
-std::unique_ptr<Function>
-project_dkt(std::shared_ptr<const GenericFunction> what,
-            std::shared_ptr<const FunctionSpace> where)
-{
-  Matrix Ap;
-  Vector bp;
-  LUSolver solver("mumps");
-  
-  NLK::Form_project_lhs project_lhs(where, where);
-  NLK::Form_project_rhs project_rhs(where);
-  std::unique_ptr<Function> f(new Function(where));
-  project_rhs.g = what;  // g is a Coefficient in a P3 space (see .ufl)
-  assemble_system(Ap, bp, project_lhs, project_rhs, {});
-  solver.solve(Ap, *(f->vector()), bp);
-  return f;
-}
-
-
 /// Rounds small (local) entries in a GenericVector to zero.  This
 /// makes only (limited) sense for y0, because the projection of the
 /// identity function from CG3 to DKT produces lots of noisy entries.
@@ -107,7 +82,6 @@ round_zeros(GenericVector& v, double precision=1e-6)
                    });
     v.set_local(block.data(), numrows, rows.data());
 }
-
 
 double
 discrete_energy(double alpha,
