@@ -6,7 +6,7 @@
 
 namespace dolfin
 {
-  std::unique_ptr<Function> eval_dkt(std::shared_ptr<const BoundaryData> fexp,
+  std::unique_ptr<Function> eval_dkt(std::shared_ptr<const InitialData> fexp,
                                      std::shared_ptr<const FunctionSpace> W3);
 
   std::unique_ptr<Function> project_dkt(std::shared_ptr<const GenericFunction> what,

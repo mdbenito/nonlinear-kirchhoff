@@ -2,6 +2,7 @@
 #include <memory>
 #include <iomanip>
 #include <numeric>
+#include <algorithm>
 #include <vector>
 #include <tuple>
 #include <cmath>
@@ -14,6 +15,7 @@
 #include "BlockMatrixAdapter.h"
 #include "BlockVectorAdapter.h"
 #include "output.h"
+#include "dkt_utils.h"
 #include "tests.h"
 #include "sweet/options.hpp"
 
@@ -51,16 +53,66 @@ class LateralBoundary : public SubDomain
   }
 };
 
-class BoundaryData : public Expression
+class InitialData : public Expression
 {
+public: 
   void eval(Array<double>& values, const Array<double>& x) const
   {
-    values[0] = x[0] * 0.3;  // Strong lateral compression
+    const double pi6 = M_PI / 6;
+    const double pi3 = M_PI / 3;
+    const double pi2 = M_PI / 2;
+    
+    double t = x[0];
     values[1] = x[1];
-    values[2] = 0;
+
+    if (-2.0 <= t && t < -2.0 + pi6) {
+      values[0] = -2.0/3.0 + (1.0/3) * std::cos(3.0*(t+2.0)-pi2);
+      values[2] =  1.0/3.0 + (1.0/3) * std::sin(3.0*(t+2.0)-pi2);
+    } else if (-2.0 + pi6 <= t && t < -pi6) {
+      values[0] = -1.0/3.0;
+      values[2] =  1.0/3.0 + t - (-2.0 + pi6);
+    } else if (-pi6 <= t && t < pi6) {
+      values[0] =               0 + (1.0/3.0) * std::cos(M_PI - 3.0*(t+pi6));
+      values[2] = 1.0/3.0+2.0-pi3 + (1.0/3.0) * std::sin(3.0*(t+pi6));
+    } else if (pi6 <= t && t < 2.0 - pi6) {
+      values[0] = 1.0/3.0;
+      values[2] = 1.0/3.0 + 2.0 - pi3 - t + pi6;
+    } else if (2.0 - pi6 <= t && t <= 2.0 ) {
+      values[0] = 2.0/3.0 + (1.0/3.0)*std::cos(3.0*(t-2.0+pi6)+M_PI);
+      values[2] = 1.0/3.0 + (1.0/3.0)*std::sin(3.0*(t-2.0+pi6)+M_PI);
+    }      
   }
+
+  /// Gradient is stored in row format: f_11, f_12, f_21, f_22, f_31, f_32
+  void gradient(Array<double>& grad, const Array<double>& x) const
+  {
+    const double pi6 = M_PI / 6;
+    const double pi3 = M_PI / 3;
+    const double pi2 = M_PI / 2;
+    
+    double t = x[0];
+    grad[1] = grad[2] = grad[5] = 0;
+    grad[3] = 1;
+    if (-2.0 <= t && t < -2.0 + pi6) {
+      grad[0] = - std::sin(3.0*(t+2.0)-pi2);
+      grad[4] =   std::cos(3.0*(t+2.0)-pi2);
+    } else if (-2.0 + pi6 <= t && t < -pi6) {
+      grad[0] = 0;
+      grad[4] = 1;
+    } else if (-pi6 <= t && t < pi6) {
+      grad[0] = std::sin(M_PI - 3.0*(t+pi6));
+      grad[4] = std::cos(3.0*(t+pi6));
+    } else if (pi6 <= t && t < 2.0 - pi6) {
+      grad[0] = 0;
+      grad[4] = -1;
+    } else if (2.0 - pi6 <= t && t <= 2.0 ) {
+      grad[0] = - std::sin(3.0*(t-2.0+pi6)+M_PI);
+      grad[4] = std::cos(3.0*(t-2.0+pi6)+M_PI);
+    }
+  }
+    
   std::size_t value_rank() const { return 1; }
-  std::size_t value_dimension(std::size_t i) const { return 3;}
+  std::size_t value_dimension(std::size_t i) const { return 3; }
 };
 
 /// Rounds small (local) entries in a GenericVector to zero.  This
@@ -106,18 +158,138 @@ discrete_energy(double alpha,
   // hermite mapping is missing in
   // apply_single_function_pullbacks.py). Because they are constant,
   // we just ignore them. 
-
-  const auto& v1 = y.vector();
-  const auto& v2 = L.vector();
-  assert(v1->size() == v2->size());
-  // take only coefficients for evaluations
-  for (int j = 0; j < v1->size(); j+=3) {
-    double val1(0), val2(0);
-    v1->get_local(&val1, 1, &j);
-    v2->get_local(&val2, 1, &j);
-    energy += val1 * val2;
-  }
+  energy += dkt_inner(y, L);
   return energy;
+}
+
+void
+hack_values(Function& y)
+{
+  auto W3 = y.function_space();
+  auto mesh = W3->mesh();
+  std::vector<la_index> dxdofs, dydofs;
+  auto v2d = vertex_to_dof_map(*W3);
+  for (int sub=0; sub < 3; ++sub) {
+    // auto dm = (*W3)[sub]->dofmap();
+    // The following should be a process-local index
+    for (VertexIterator vit(*mesh); !vit.end(); ++vit) {
+      auto idx = static_cast<la_index>(vit->index());
+      auto dofdx = v2d[9*idx + 3*sub + 1];
+      auto dofdy = v2d[9*idx + 3*sub + 2];
+      dxdofs.push_back(dofdx);
+      dydofs.push_back(dofdy);
+    }
+  }
+  std::vector<double> dx(dxdofs.size()), dy(dydofs.size());
+  size_t ctr = 0;
+  std::generate(dx.begin(), dx.end(), [&ctr]() { return (ctr++ % 3 == 0) ? 1.0 : 0.0; });
+  ctr = 0;
+  std::generate(dy.begin(), dy.end(), [&ctr]() { return (ctr++ % 3 == 1) ? 1.0 : 0.0; });
+  y.vector()->set(dx.data(), dxdofs.size(), dxdofs.data());
+  y.vector()->set(dy.data(), dydofs.size(), dydofs.data());
+}
+
+// compute |nablaT y nabla y - id|
+// FIXME!! I'm computing average distance across all vertices instead
+// of integrating
+double
+distance_to_isometry(Function& y)
+{
+  auto W3 = y.function_space();
+  auto mesh = W3->mesh();
+  std::vector<la_index> dxdofs, dydofs;
+  auto v2d = vertex_to_dof_map(*W3);
+  for (int sub=0; sub < 3; ++sub) {
+    // auto dm = (*W3)[sub]->dofmap();
+    // The following should be a process-local index
+    for (VertexIterator vit(*mesh); !vit.end(); ++vit) {
+      auto idx = static_cast<la_index>(vit->index());
+      auto dofdx = v2d[9*idx + 3*sub + 1];
+      auto dofdy = v2d[9*idx + 3*sub + 2];
+      dxdofs.push_back(dofdx);
+      dydofs.push_back(dofdy);
+    }
+  }
+  std::vector<double> dx(dxdofs.size()), dy(dydofs.size());
+  y.vector()->get(dx.data(), dxdofs.size(), dxdofs.data());
+  y.vector()->get(dy.data(), dydofs.size(), dydofs.data());
+  
+  double dxdx = std::inner_product(dx.begin(), dx.end(), dx.begin(), 0),
+         dxdy = std::inner_product(dx.begin(), dx.end(), dy.begin(), 0),
+         dydy = std::inner_product(dy.begin(), dy.end(), dy.begin(), 0);
+  // subtract identity at each vertex
+  auto N = mesh->num_vertices();
+  double frobsq = (std::pow(dxdx - N, 2) +
+                   std::pow(dydy - N, 2) +
+                   2*std::pow(dxdy, 2)) / N;
+  return std::sqrt(frobsq);
+}
+
+/// Hack to initialise the boundary condition to what we need
+void
+hack_boundary_values(const SubDomain& subdomain, Function& u)
+{
+  /// Extract info and ensure the mesh (connectivity) has been initialised
+  auto W = u.function_space();
+  // for (int i=0; i < 3; ++i)
+  //   dms.push_back(std::move(W[i]->dofmap()));
+  // auto dm = W->dofmap();
+  auto mesh = W->mesh();
+  auto D = mesh->topology().dim();
+  mesh->init(D);
+  mesh->init(D - 1);
+  mesh->init(D - 1, D);
+  
+  /// Build mesh function using the SubDomain and iterate facets using it
+  /// (TODO: there must be some other way)
+  FacetFunction<std::size_t> subdomains(mesh, 1);
+  subdomain.mark(subdomains, 42, false);  // don't check midpoints
+
+  /// This is *very* inefficient...
+  for (int sub = 0; sub < 3; ++sub) {
+    auto dm = (*W)[sub]->dofmap();
+    for (FacetIterator facet(*mesh); !facet.end(); ++facet) {
+      if (subdomains[*facet] != 42)   // nothing to do
+        continue;
+
+      // Get cell to which facet belongs and local index.
+      dolfin_assert(facet.num_entities(D) > 0);
+      auto cell_index = facet->entities(D)[0];
+      Cell cell(*mesh, cell_index);
+      auto facet_local_index = cell.index(*facet);
+
+      // local-global dof mapping for cell
+      auto cell_dofs = dm->cell_dofs(cell.index());
+      // local-local dof mapping of dofs on the facet
+      std::vector<std::size_t> local_facet_dofs;
+      dm->tabulate_facet_dofs(local_facet_dofs, facet_local_index);
+      // local-global mapping for facet dofs
+      // Vector::get() doesn't like size_t... duh!
+      std::vector<la_index> facet_dofs(local_facet_dofs.size());
+      std::transform(local_facet_dofs.begin(), local_facet_dofs.end(),
+                     facet_dofs.begin(),
+                     [&cell_dofs] (std::size_t& dof) {
+                       return static_cast<la_index>(cell_dofs[dof]);
+                     });
+      // Test values for facet
+      la_index numrows = facet_dofs.size();
+      std::vector<double> uvalues(numrows);
+      u.vector()->get(uvalues.data(), numrows, facet_dofs.data());
+      for(auto i = 0; i < numrows; ++i) {  // 6 values per facet and subspace
+        // std::cout << "ldof " << i << ", vdof " << i % 3  << ", gdof "
+        //           << facet_dofs[i] << "\n";
+        switch (i % 3) {
+        case 0:
+          if (sub == 0)
+            uvalues[i] = uvalues[i] < 0 ? -0.6 : 0.6;
+              break;
+        case 1: uvalues[i] = (sub == 0) ? 1.0 : 0.0; break;
+        case 2: uvalues[i] = (sub == 1) ? 1.0 : 0.0; break;
+        }
+      }
+      u.vector()->set(uvalues.data(), numrows, facet_dofs.data());
+    }
+  }
 }
 
 bool
@@ -211,13 +383,17 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
   std::cout << "Projecting initial data onto W^3... ";
   tic();
   // Initial data: careful that it fulfils the BCs.
-  auto y0 = project_dkt(std::make_shared<BoundaryData>(), W3);
+  auto y0 = eval_dkt(std::make_shared<InitialData>(), W3);
+  // CAREFUL!! The discontinuities introduced by this propagate and
+  // crumple the solution!! Or so it seems...
+  // hack_boundary_values(*bdry, *y0);
+  // hack_values(*y0);
   table("Projection of data", "time") = toc();
   std::cout << "Done.\n";
   
   auto& v = *(y0->vector());
   round_zeros(v);  // This modifies y0
-  NLK::dump_full_tensor(v, 4, "y0.data");
+  NLK::dump_full_tensor(v, 6, "y0.data", true, true);
 
   ////////////////////////////////////////////////////////////////////
   // Assembly of system matrix
@@ -249,7 +425,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
 
   /// Lower right block
   auto paddingMat = Bk.get_padding();
-  NLK::dump_full_tensor(*paddingMat, 12, "D.data");
+  // NLK::dump_full_tensor(*paddingMat, 12, "D.data");
   
   auto block_Mk = std::make_shared<BlockMatrix>(2, 2);
   block_Mk->set_block(0, 0, A);
@@ -353,7 +529,8 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
   BlockVectorAdapter dtY_L(block_dtY_L);
   
   Function y(*y0);  // Deformation y_{k+1}, begin with initial condition
-
+  DKTGradient DG;
+  
   ////////////////////////////////////////////////////////////////////
   // Main loop
   
@@ -400,15 +577,17 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
     table("Solution", "time") =
       table.get_value("Solution", "time") + toc();
     std::cout << "Done with norm = "
-              << norm(*(dtY_L.get())) << "\n";
+              << std::sqrt(dkt_inner(dtY_L.get(), dtY_L.get(), W3)) << "\n";
     NLK::dump_full_tensor(dtY_L.get(), 12, "dtY_L.data");
 
     std::cout << "Testing whether we should stop... ";
     tic();
     Ao->mult(*dtY, tmp);
     auto nr = std::sqrt(tmp.inner(*dtY));
-    std::cout << "norm of \\nabla theta_h dtY =  " << nr << "\n";
-    stop = nr < eps || nr > 1;  // FIXME: if nr > 1 we are diverging (?)
+    std::shared_ptr<const GenericVector> gr(std::move(DG.apply_vec(T3, W3, dtY)));
+    auto nr2 = std::sqrt(dkt_inner(gr, gr, W3));
+    std::cout << "norm of \\nabla theta_h dtY =  " << nr << " -- " << nr2 << "\n";
+    stop = nr < eps; // || nr > 1;  // FIXME: if nr > 1 we are diverging (?)
     table("Stopping condition", "time") =
       table.get_value("Stopping condition", "time") + toc();
 
@@ -416,6 +595,8 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
     std::cout << "Testing boundary conditions... "
               << (equal_at_p(*bdry, y, *y0) ? "OK." : "WRONG!!!")
               << "\n";
+    std::cout << "Distance to isometry: "
+              << distance_to_isometry(y) << "\n";
     
     double energy = discrete_energy(alpha, Ao, y, L); 
     energy_values.push_back(energy);
@@ -423,17 +604,18 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
       double prev = *(energy_values.end()-2);
       std::cout << "Energy change: " << 100*(energy - prev)/prev << "% ("
                 // check unconditional stability:
-                << (energy+tau*nr*nr <= prev ? "OK" : "WRONG") << ").\n";
+                << ((energy + tau*nr*nr <= prev) ? "OK" : "WRONG") << ").\n";
     }
 
     if(std::floor(step / adaptive_steps) > dec_ctr) {
       dec_ctr = std::floor(step / adaptive_steps);
       tau *= adaptive_factor;
       std::cout << "Corrected tau = " << tau << "\n";
-      file << y;  // output current solution
+      
+      // output current solution
+      file << y;
+      NLK::dump_full_tensor(y.vector(), 12, "yk.data", true, true);
     }
-
-    NLK::dump_full_tensor(y.vector(), 12, "yk.data");
   }
   NLK::dump_raw_matrix(energy_values, 1, energy_values.size(), 14,
                        "energy.data", true, true);
