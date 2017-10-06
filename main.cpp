@@ -672,7 +672,7 @@ main(int argc, char** argv)
           "Pause each worker for so many seconds in order to attach a debugger",
           pause);
   opt.get("-s", "--test",
-          "Run the specified test (dofs, blockvector)", test);
+          "Run the specified test (dofs, blockvector, dkt)", test);
 
   if (opt.help_requested())
     return 1;
@@ -685,6 +685,10 @@ main(int argc, char** argv)
     std::cout << "Running test " << test << "...\n";
     NLK::DEBUG = 3;
     return test_BlockVectorAdapter();
+  } else if (test == "dkt") {
+    std::cout << "Running test " << test << "...\n";
+    NLK::DEBUG = 3;
+    return test_DKT();
   }
 
   // else...
