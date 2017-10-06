@@ -4,6 +4,7 @@
 #include <Eigen/Dense>
 #include <vector>
 #include <array>
+#include <memory>
 
 namespace dolfin
 {
@@ -45,7 +46,7 @@ public:
   typedef std::array<double, 12> P22Vector;
   typedef std::array<double, 9> P3Vector;
 
-  /* Initialise the local cell gradient matrix.
+  /* Initialize the local cell gradient matrix.
    * (interpolates a scalar function from P_2^2 into DKT)
    *
    * dim is the number of subspaces this gradient will operate on,

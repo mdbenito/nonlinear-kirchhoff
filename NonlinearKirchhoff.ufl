@@ -20,6 +20,8 @@ f = Coefficient(dktelement)
 force = inner(f,v)*dx
 
 # Use this to compute the integral of the nodal interpolant
+# FIXME: can't use abs() because it's nonlinear, but cannot use Function then
+# because that needs a FunctionSpace...
 z = TestFunction(cg1element)
 beta = z*dx
 

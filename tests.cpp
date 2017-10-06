@@ -201,9 +201,8 @@ testDKT(void)
 
   auto absdiff = [] (double x, double y) { return std::abs(x-y); };
   std::transform(D.begin(), D.end(), D_result.begin(), D_result.begin(), absdiff);
-  std::accumulate(D.begin(), D.end(), std::sum<double>);
 
-  bool ok = true;
+  return near(std::accumulate(D.begin(), D.end(), 0.0), 0.0) ? 0 : 1;
 }
 
 bool
