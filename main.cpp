@@ -364,10 +364,12 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
   auto T3 = std::make_shared<NLK::Form_p26_FunctionSpace_0>(mesh);
 
   std::cout << "Running on a mesh with " << mesh->num_cells()
-            << " cells.\n";
-  std::cout << "FE space has " << W3->dim() << " dofs.\n";
-  std::cout << "Using alpha = " << alpha << ", tau = " << tau << ".\n";
-
+            << " cells.\n"
+            << "FE space has " << W3->dim() << " dofs.\n"
+            << "Using alpha = " << alpha << ", tau = " << tau << ".\n"
+            << "Scaling timestep every " << static_cast<int>(adaptive_steps)
+            << " by " << adaptive_factor << ".\n";
+            
   // The stiffness matrix includes the condition for the nodes on the
   // Dirichlet boundary to be zero. This ensures that the updates
   // during gradient descent don't change the values of the initial
