@@ -274,8 +274,7 @@ test_DKT_identity()
       std::cout << d << " ";
     std::cout << "\n";
   } else {
-    std::cout << "dof test ok for identity. (" << 
-              distance_to_isometry(*idd) << ")\n";
+    std::cout << "dof test ok for identity. \n";
   }
   return diff->size();
 }
@@ -319,8 +318,7 @@ test_DKT_polynomial()
       std::cout << d << " ";
     std::cout << "\n";
   } else {
-    std::cout << "dof test ok for polynomial. (" << 
-              distance_to_isometry(*fd) << ")\n";
+    std::cout << "dof test ok for polynomial.\n";
   }
   return diff->size();
 }
