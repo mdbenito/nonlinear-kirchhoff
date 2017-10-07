@@ -317,7 +317,7 @@ equal_at_p(const SubDomain& subdomain, const Function& u, const Function& v)
 ///   adaptive_factor: change step size by this factor
 int
 dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
-        double tau, double adaptive_steps, double adaptive_factor)
+        double tau, double checkpoints_at, double adaptive_factor)
 {
   KirchhoffAssembler assembler;
   Assembler rhs_assembler;
@@ -330,8 +330,8 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
             << " cells.\n"
             << "FE space has " << W3->dim() << " dofs.\n"
             << "Using alpha = " << alpha << ", tau = " << tau << ".\n"
-            << "Scaling timestep every " << static_cast<int>(adaptive_steps)
-            << " by " << adaptive_factor << ".\n";
+            << "Scaling timestep every " << static_cast<int>(checkpoints_at)
+            << " steps by " << adaptive_factor << ".\n";
             
   // The stiffness matrix includes the condition for the nodes on the
   // Dirichlet boundary to be zero. This ensures that the updates
@@ -572,8 +572,8 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
                 << ((energy + tau*nr*nr <= prev) ? "OK" : "WRONG") << ").\n";
     }
 
-    if(std::floor(step / adaptive_steps) > dec_ctr) {
-      dec_ctr = std::floor(step / adaptive_steps);
+    if(std::floor(step / checkpoints_at) > dec_ctr) {
+      dec_ctr = std::floor(step / checkpoints_at);
       tau *= adaptive_factor;
       std::cout << "Corrected tau = " << tau << "\n";
       
@@ -606,7 +606,8 @@ main(int argc, char** argv)
   int pause = 0;
   std::string diagonal = "right";
   std::string test = "none";
-  std::vector<double> adaptive;  // scale tau every x steps by a factor y
+  int checkpoints_at = 25;
+  double tstep_scale = 0.99;
   bool help = false;
   sweet::Options opt(argc, const_cast<char**>(argv),
                      "Nonlinear Kirchhoff model on the unit square.");
@@ -625,18 +626,19 @@ main(int argc, char** argv)
   opt.get("-a", "--alpha",
           "Constant scaling of the bending energy", alpha);
   opt.get("-t", "--tau",
-          "Scaling of the timestep wrt. minimal cell size", tau);
-  opt.getMultiple("-c", "--correction",
-                  "Adaptive parameters for tau (number of timesteps, multiplier)",
-                  adaptive);
+          "Scaling of the time step wrt. minimal cell size", tau);
   opt.get("-x", "--max_steps",
           "Maximum number of time steps", max_steps);
+  opt.get("-c", "--checkpoint",
+          "Output solution data every so many steps.", checkpoints_at);
+  opt.get("-s", "--scale",
+          "Scale time step at checkpoints by this amount.", tstep_scale);
   opt.get("-e", "--eps_stop",
           "Stopping threshold.", eps);
   opt.get("-p", "--pause",
           "Pause each worker for so many seconds in order to attach a debugger",
           pause);
-  opt.get("-s", "--test",
+  opt.get("-q", "--test",
           "Run the specified test (dofs, blockvector, dkt)", test);
 
   if (opt.help_requested())
@@ -669,12 +671,7 @@ main(int argc, char** argv)
   // In the paper the triangulation consists of halved squares and tau
   // is 2^{-1/2} times the length of the sides i.e. hmin() in our case
   tau *= mesh->hmin();
-  // Set default values:
-  if (adaptive.size() < 1) adaptive.push_back(100);
-  if (adaptive.size() < 2) adaptive.push_back(0.9);
-  double adaptive_steps = adaptive[0];  // decrease tau every so many steps
-  double adaptive_factor = adaptive[1]; // by such a multiplier
-  
+
   /// A trick from the MPI FAQ
   /// (https://www.open-mpi.org/faq/?category=debugging)
   //
@@ -706,7 +703,6 @@ main(int argc, char** argv)
         sleep(pause);
   }
 
-  return dostuff(mesh, alpha, max_steps, eps, tau,
-                 adaptive_steps, adaptive_factor);
+  return dostuff(mesh, alpha, max_steps, eps, tau, checkpoints_at,
+                 tstep_scale);
 }
-
