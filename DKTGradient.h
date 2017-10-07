@@ -93,7 +93,12 @@ public:
   apply_vec(std::shared_ptr<const dolfin::FunctionSpace> T,
             std::shared_ptr<const dolfin::FunctionSpace> W,
             std::shared_ptr<const dolfin::Vector> dktfun);
-                        
+
+  static void
+  permutation_hack(DKTGradient::M_t& M, bool undo = false);
+  M_t M() const { return _M; };
+  Mt_t Mt() const { return _Mt; };
+  
 protected:
   M_t   _M;  // cell-local gradient matrix
   Mt_t _Mt;  // cell-local transposed gradient matrix

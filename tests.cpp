@@ -10,8 +10,10 @@
 #include "output.h"
 #include "NonlinearKirchhoff.h"
 #include "BlockVectorAdapter.h"
+#include "dkt_utils.h"
 
 using namespace dolfin;
+namespace NLK { using namespace NonlinearKirchhoff; }
 
 //////////////////////////////////////////////////////////////////////
 // FIXME!!! THIS IS COPIED & PASTED FROM main.cpp. FACTOR OUT!      //
@@ -119,7 +121,7 @@ from dolfin import *
 import nbimporter
 from discrete_gradient import DKTCellGradient
 import numpy as np
-np.set_printoptions(precision=2, linewidth=120)
+np.set_printoptions(precision=4, linewidth=120)
 
 domain = UnitSquareMesh(1,1)
 V = VectorFunctionSpace(domain, "Lagrange", dim=2, degree=2)
@@ -150,66 +152,175 @@ int
 test_DKT(void)
 {
   DKTGradient dg;
-  DKTGradient::P3Tensor D;
-
   std::vector<double> cc = {0,0,1,0,1,1};
   DKTGradient::P22Vector p22coeffs;
   DKTGradient::P3Vector p3rcoeffs = {1,0,0,0,0,0,0,0,0};
-  dg.update(cc);
-  dg.apply_vec(p3rcoeffs, p22coeffs);
-
-//  std::vector<double> M_result = {
-//    0.,    1.     0.,    0.,    0.,    0.,    0.,    0.,    0.,  
-//    0.,    0.,    1.,    0.,    0.,    0.,    0.,    0.,    0.,  
-//    0.,    0.,    0.,    0.,    1.,    0.,    0.,    0.,    0.,  
-//    0.,    0.,    0.,    0.,    0.,    1.,    0.,    0.,    0.,  
-//    0.,    0.,    0.,    0.,    0.,    0.,    0.,    1.,    0.,  
-//    0.,    0.,    0.,    0.,    0.,    0.,    0.,    0.,    1.,  
-//    0.,    0.,    0.,   -0.,    0.5,   0.,    0.,    0.5,   0.,  
-//    0.,    0.,    0.,   -1.5,   0.,   -0.25,  1.5,   0.,   -0.25,
-//   -0.75,  0.13, -0.37,  0.,    0.,    0.,    0.75,  0.13, -0.37,
-//   -0.75, -0.37,  0.13,  0.,    0.,    0.,    0.75, -0.37,  0.13,
-//   -1.5,  -0.25,  0.,    1.5,  -0.25,  0.,    0.,    0.,    0.,  
-//   -0.,    0.,    0.5,   0.,    0.,    0.5,   0.,    0.,    0. };
   
+  dg.update(cc);
+  DKTGradient::M_t M_ok;
+  M_ok << 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+          0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+          0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0,
+          0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
+          0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+          0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+          0.0, 0.0, 0.0, -0.0, 0.5, 0.0, 0.0, 0.5, 0.0,
+          0.0, 0.0, 0.0, -1.5, 0.0, -0.25, 1.5, 0.0, -0.25,
+          -0.75, 0.125, -0.375, 0.0, 0.0, 0.0, 0.75, 0.125, -0.375,
+          -0.75, -0.375, 0.125, 0.0, 0.0, 0.0, 0.75, -0.375, 0.125,
+          -1.5, -0.25, 0.0, 1.5, -0.25, 0.0, 0.0, 0.0, 0.0,
+          0.0, 0.0, 0.5, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0;
+  
+  DKTGradient::permutation_hack(M_ok);
+  auto Mdiff = (M_ok - dg.M()).sum();
+  bool ok = near(Mdiff, 0.0, 1e-12);
+  std::cout << "Local gradient operator " << (ok ? "OK" : "differs") << "\n";
+
+//const auto& M = dg.M();
+//  for(int i =0; i < 12; ++i) {
+//    for(int j = 0; j < 9; ++j)
+//      std::cout << M(i,j) - M_ok(i, j) << " ";
+//    std::cout << "\n";
+//  }
+  
+  dg.apply_vec(p3rcoeffs, p22coeffs);
+  
+  // TODO: check p22coeffs
+  // FIXME: this test is bogus: we need to take into account
+  // the permutation_hack()
   DKTGradient::P22Tensor p22tensor = {
-     1.  ,  0.17,  0.  ,  0.  ,  0.  , -0.67,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,
-     0.17,  1.  ,  0.17, -0.67,  0.  , -0.67,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,
-     0.  ,  0.17,  1.  , -0.67,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,
-     0.  , -0.67, -0.67,  2.67, -1.33,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,
-     0.  ,  0.  ,  0.  , -1.33,  5.33, -1.33,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,
-    -0.67, -0.67,  0.  ,  0.  , -1.33,  2.67,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,
-     0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  1.  ,  0.17,  0.  ,  0.  ,  0.  , -0.67,
-     0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.17,  1.  ,  0.17, -0.67,  0.  , -0.67,
-     0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.17,  1.  , -0.67,  0.  ,  0.  ,
-     0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  , -0.67, -0.67,  2.67, -1.33,  0.  ,
-     0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  , -1.33,  5.33, -1.33,
-     0.  ,  0.  ,  0.  ,  0.  ,  0.  ,  0.  , -0.67, -0.67,  0.  ,  0.  , -1.33,  2.67 };
+    1.0, 0.1667, -0.0, 0.0, 0.0, -0.6667, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 
+    0.1667, 1.0, 0.1667, -0.6667, 0.0, -0.6667, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 
+    -0.0, 0.1667, 1.0, -0.6667, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 
+    0.0, -0.6667, -0.6667, 2.6667, -1.3333, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 
+    0.0, 0.0, 0.0, -1.3333, 5.3333, -1.3333, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 
+    -0.6667, -0.6667, 0.0, 0.0, -1.3333, 2.6667, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 
+    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.1667, -0.0, 0.0, 0.0, -0.6667, 
+    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1667, 1.0, 0.1667, -0.6667, 0.0, -0.6667, 
+    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.0, 0.1667, 1.0, -0.6667, 0.0, 0.0, 
+    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.6667, -0.6667, 2.6667, -1.3333, 0.0, 
+    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.3333, 5.3333, -1.3333, 
+    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.6667, -0.6667, 0.0, 0.0, -1.3333, 2.6667 };
 
+  DKTGradient::P3Tensor D;
+//  DKTGradient::permutation_hack(dg._M, true); // HACK!!!!
   dg.apply(p22tensor, D);
-
+//  DKTGradient::permutation_hack(dg._M); // UNDO HACK!!!!
+  
   DKTGradient::P3Tensor D_ok = {
-    10.31,   1.53,  1.16, -11.06,  1.75,  0.91,  0.75, -0.22,  0.06, 
-    1.53,    1.54,   0.1,  -1.66,  0.21,   0.1,  0.12,  0.33, -0.97, 
-    1.16,     0.1,  1.91,  -0.53,  0.21,  0.12, -0.62, -0.44,  -0.3, 
-    -11.06, -1.66, -0.53,  14.25, -2.12, -0.12, -3.19,  0.22,  0.34, 
-    1.75,    0.21,  0.21,  -2.12,  1.58, -0.69,  0.38,  0.12,  0.02, 
-    0.91,     0.1,  0.12,  -0.12, -0.69,  3.56, -0.78, -1.59,  0.18, 
-    0.75,    0.12, -0.62,  -3.19,  0.38, -0.78,  2.44,    0., -0.41, 
-    -0.22,   0.33, -0.44,   0.22,  0.12, -1.59,    0.,  6.04,  -1.7, 
-    0.06,   -0.97,  -0.3,   0.34,  0.02,  0.18, -0.41,  -1.7,  3.05 };
+    10.3125, 1.5312, 1.1563, -11.0625, 1.75, 0.9062, 0.75, -0.2188, 0.0625, 
+    1.5312, 1.5365, 0.099, -1.6562, 0.2083, 0.099, 0.125, 0.3281, -0.9688, 
+    1.1563, 0.099, 1.9115, -0.5313, 0.2083, 0.1198, -0.625, -0.4427, -0.3021, 
+    -11.0625, -1.6562, -0.5313, 14.25, -2.125, -0.125, -3.1875, 0.2188, 0.3437, 
+    1.75, 0.2083, 0.2083, -2.125, 1.5833, -0.6875, 0.375, 0.125, 0.0208, 
+    0.9062, 0.099, 0.1198, -0.125, -0.6875, 3.5625, -0.7812, -1.5885, 0.1823, 
+    0.75, 0.125, -0.625, -3.1875, 0.375, -0.7812, 2.4375, 0.0, -0.4063, 
+    -0.2188, 0.3281, -0.4427, 0.2188, 0.125, -1.5885, 0.0, 6.0365, -1.6979, 
+    0.0625, -0.9688, -0.3021, 0.3437, 0.0208, 0.1823, -0.4063, -1.6979, 3.0469 };
 
   auto absdiff = [] (double x, double y) { return std::abs(x-y); };
   std::transform(D.begin(), D.end(), D_ok.begin(), D.begin(), absdiff);
 
   auto diff = std::accumulate(D.begin(), D.end(), 0.0);
-  std::cout << "Total difference:" << std::setprecision(3) << diff << "\n";
- 
-  return near(diff, 0.0) ? 0 : 1;
+  std::cout << "Total difference between gradients:" << std::setprecision(3) 
+            << diff << "\n";
+  ok = ok && near(diff, 0.0, 1e-12);
+  
+  int entry=0;
+  for (auto d: D)
+      std::cout << std::setprecision(3) 
+                << d << ((++entry % 9 == 0) ? "\n" : " ");
+  
+  std::cout << "\n";
+  return ok ? 0 : 1;
 }
 
-bool
-test_dkt_identity()
+class IdentityDiff : public DiffExpression
 {
-  return false;
+  void eval(Array<double>& values, const Array<double>& x) const
+  {
+    values[0] = x[0];
+    values[1] = x[1];
+    values[2] = 0;
+  }
+
+  /// Gradient is stored in row format: f_11, f_12, f_21, f_22, f_31, f_32
+  void gradient(Array<double>& grad, const Array<double>& x) const
+  {
+    grad[0] = 1.0; grad[1] = 0.0;
+    grad[2] = 0.0; grad[3] = 1.0;
+    grad[4] = 0.0; grad[5] = 0.0;
+  }
+  
+  std::size_t value_rank() const { return 1; }
+  std::size_t value_dimension(std::size_t i) const { return 3;}
+};
+
+int
+test_DKT_identity()
+{
+  auto mesh = std::make_shared<UnitSquareMesh>(MPI_COMM_WORLD,
+                                              32, 32, "crossed");
+  auto W3 = std::make_shared<NLK::Form_dkt_FunctionSpace_0>(mesh);
+  auto id = std::shared_ptr<Function>
+      (std::move(project_dkt(std::make_shared<IdentityDiff>(), W3)));
+  auto idd = std::shared_ptr<Function>
+      (std::move(eval_dkt(std::make_shared<IdentityDiff>(), W3)));
+  
+  auto diff = dofs_which_differ(id, idd, 1e-8);
+  if (diff->size() > 0) {
+    std::cout << diff->size() << " dofs differ: ";
+    for (auto d : *diff)
+      std::cout << d << " ";
+    std::cout << "\n";
+  } else {
+    std::cout << "dof test ok for identity. (" << 
+              distance_to_isometry(*idd) << ")\n";
+  }
+  return diff->size();
+}
+
+class Poly2Diff : public DiffExpression
+{
+  void eval(Array<double>& values, const Array<double>& x) const
+  {
+    values[0] = x[0] * x[0] + 5*x[1] * x[1];
+    values[1] = x[0] * x[1];
+    values[2] = x[0] + 3*x[1];
+  }
+
+  /// Gradient is stored in row format: f_11, f_12, f_21, f_22, f_31, f_32
+  void gradient(Array<double>& grad, const Array<double>& x) const
+  {
+    grad[0] = 2.0*x[0]; grad[1] = 10.0*x[1];
+    grad[2] = x[1];     grad[3] = x[0];
+    grad[4] = 1.0;      grad[5] = 3.0;
+  }
+  
+  std::size_t value_rank() const { return 1; }
+  std::size_t value_dimension(std::size_t i) const { return 3;}
+};
+
+int
+test_DKT_polynomial()
+{
+  auto mesh = std::make_shared<UnitSquareMesh>(MPI_COMM_WORLD,
+                                              32, 32, "crossed");
+  auto W3 = std::make_shared<NLK::Form_dkt_FunctionSpace_0>(mesh);
+  auto f = std::shared_ptr<Function>
+      (std::move(project_dkt(std::make_shared<Poly2Diff>(), W3)));
+  auto fd = std::shared_ptr<Function>
+      (std::move(eval_dkt(std::make_shared<Poly2Diff>(), W3)));
+  
+  auto diff = dofs_which_differ(f, fd, 1e-8);
+  if (diff->size() > 0) {
+    std::cout << diff->size() << " dofs differ: ";
+    for (auto d : *diff)
+      std::cout << d << " ";
+    std::cout << "\n";
+  } else {
+    std::cout << "dof test ok for polynomial. (" << 
+              distance_to_isometry(*fd) << ")\n";
+  }
+  return diff->size();
 }

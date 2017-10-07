@@ -55,7 +55,6 @@ class LateralBoundary : public SubDomain
 
 class InitialData : public DiffExpression
 {
-public: 
   void eval(Array<double>& values, const Array<double>& x) const
   {
     const double pi6 = M_PI / 6;
@@ -348,7 +347,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
 
   std::cout << "Projecting initial data onto W^3... ";
   tic();
-  // Initial data: careful that it fulfils the BCs.
+  // Initial data: careful that it fulfills the BCs.
   auto y0 = eval_dkt(std::make_shared<InitialData>(), W3);
   // CAREFUL!! The discontinuities introduced by this propagate and
   // crumple the solution!! Or so it seems...
@@ -654,7 +653,7 @@ main(int argc, char** argv)
   } else if (test == "dkt") {
     std::cout << "Running test " << test << "...\n";
     NLK::DEBUG = 3;
-    return test_DKT();
+    return test_DKT() + test_DKT_identity() + test_DKT_polynomial();
   } else if (test != "none") {
     std::cout << "Unknown test type " << test << ".\n";
     return 1;

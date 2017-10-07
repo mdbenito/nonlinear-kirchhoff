@@ -39,15 +39,24 @@ DKTGradient::update(const Cell& cell)
 /// HACK: this permutation is applied to M during update()
 // to adapt for the actual ordering of dofs local to a cell.
 void
-permutation_hack(DKTGradient::M_t& M)
+DKTGradient::permutation_hack(DKTGradient::M_t& M, bool undo)
 {
   const int rows = 12;
   Eigen::Matrix<double, 12, 12, Eigen::RowMajor> P;
   P.setZero();
+  
   // position in array is destination row, value is source row:
-  int permutations[] = {0,6,1,7,2,8,3,9,4,10,5,11};
-  for (int i = 0; i < 12; ++i)
-    P(permutations[i], i) = 1.0;
+  int permutations[12];
+  if (undo) {
+    int permutations[] = {0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11};
+    for (int i = 0; i < 12; ++i)
+      P(permutations[i], i) = 1.0;
+  } else {
+    int permutations[] = {0, 6, 1, 7, 2, 8, 3, 9, 4, 10, 5, 11};
+    for (int i = 0; i < 12; ++i)
+      P(permutations[i], i) = 1.0;
+  }
+
   M = (P * M).eval();
 }
 

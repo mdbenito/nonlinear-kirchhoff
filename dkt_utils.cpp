@@ -142,4 +142,30 @@ namespace dolfin
     return dkt_inner(f1.vector(), f2.vector(), f1.function_space());
   }
 
+  std::unique_ptr<std::vector<la_index>>
+  dofs_which_differ(std::shared_ptr<const Function> f,
+                    std::shared_ptr<const Function> g,
+                    double eps)
+  {
+    dolfin_assert(f->function_space() == g->function_space());
+
+    auto u = f->vector();
+    auto v = g->vector();
+    auto dim = f->function_space()->dim();
+    std::vector<la_index> dofs(dim);
+    std::iota(dofs.begin(), dofs.end(), 0);
+    std::vector<double> uu(dim), vv(dim);
+    u->get(uu.data(), dofs.size(), dofs.data());
+    v->get(vv.data(), dofs.size(), dofs.data());
+    
+    auto absdiff = [] (double x, double y) -> int { return std::abs(x-y); };
+    std::transform(uu.begin(), uu.end(), vv.begin(), vv.begin(), absdiff);
+    
+    std::unique_ptr<std::vector<la_index>> ret(new std::vector<la_index>());
+    for (auto d: dofs)
+      if (vv[d] > eps)
+        ret->push_back(d);
+    
+    return ret;
+  }
 }

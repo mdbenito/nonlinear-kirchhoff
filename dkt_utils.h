@@ -31,6 +31,11 @@ namespace dolfin
                    std::shared_ptr<const FunctionSpace> W3);
 
   double dkt_inner(const Function& f1, const Function& f2);
+  
+  std::unique_ptr<std::vector<la_index>>
+  dofs_which_differ(std::shared_ptr<const Function> u,
+                    std::shared_ptr<const Function> v,
+                    double eps=1e-8);
 }
 
 #endif
