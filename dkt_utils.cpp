@@ -1,11 +1,49 @@
+#include <algorithm>
 #include "dkt_utils.h"
 #include <dolfin.h>
 #include "NonlinearKirchhoff.h"
 
-namespace NLK { using namespace NonlinearKirchhoff; }
-
 namespace dolfin
 {
+  namespace NLK { using namespace NonlinearKirchhoff; }
+
+  // compute |nablaT y nabla y - id|
+  // FIXME!! I'm computing average distance across all vertices instead
+  // of integrating
+
+  double
+  distance_to_isometry(Function& y)
+  {
+    auto W3 = y.function_space();
+    auto mesh = W3->mesh();
+    std::vector<la_index> dxdofs, dydofs;
+    auto v2d = vertex_to_dof_map(*W3);
+    for (int sub = 0; sub < 3; ++sub) {
+      // auto dm = (*W3)[sub]->dofmap();
+      // The following should be a process-local index
+      for (VertexIterator vit(*mesh); !vit.end(); ++vit) {
+        auto idx = static_cast<la_index> (vit->index());
+        auto dofdx = v2d[9 * idx + 3 * sub + 1];
+        auto dofdy = v2d[9 * idx + 3 * sub + 2];
+        dxdofs.push_back(dofdx);
+        dydofs.push_back(dofdy);
+      }
+    }
+    std::vector<double> dx(dxdofs.size()), dy(dydofs.size());
+    y.vector()->get(dx.data(), dxdofs.size(), dxdofs.data());
+    y.vector()->get(dy.data(), dydofs.size(), dydofs.data());
+
+    double dxdx = std::inner_product(dx.begin(), dx.end(), dx.begin(), 0),
+        dxdy = std::inner_product(dx.begin(), dx.end(), dy.begin(), 0),
+        dydy = std::inner_product(dy.begin(), dy.end(), dy.begin(), 0);
+    // subtract identity at each vertex
+    auto N = mesh->num_vertices();
+    double frobsq = (std::pow(dxdx - N, 2) +
+                     std::pow(dydy - N, 2) +
+                     2 * std::pow(dxdy, 2)) / N;
+    return std::sqrt(frobsq);
+  }
+
   std::unique_ptr<Function>
   eval_dkt(std::shared_ptr<const DiffExpression> fexp,
            std::shared_ptr<const FunctionSpace> W3)

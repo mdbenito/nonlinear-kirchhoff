@@ -10,15 +10,19 @@ namespace dolfin
   class DiffExpression : public Expression
   {
   public:
-    virtual void gradient(Array<double>& grad, const Array<double>& x) const = 0;
+    virtual void gradient(Array<double>& grad,
+                          const Array<double>& x) const = 0;
   };
 
+  double distance_to_isometry(Function& y);
+  
   std::unique_ptr<Function> eval_dkt(std::shared_ptr<const DiffExpression> fexp,
                                      std::shared_ptr<const FunctionSpace> W3);
 
-  std::unique_ptr<Function> project_dkt(std::shared_ptr<const GenericFunction> what,
-                                        std::shared_ptr<const FunctionSpace> where);
-  
+  std::unique_ptr<Function>
+  project_dkt(std::shared_ptr<const GenericFunction> what,
+              std::shared_ptr<const FunctionSpace> where);
+
   std::unique_ptr<std::vector<int>>
   nodal_indices(std::shared_ptr<const FunctionSpace> W3);
 
