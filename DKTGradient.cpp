@@ -181,8 +181,7 @@ DKTGradient::apply_vec(std::shared_ptr<const FunctionSpace> T,   // (P2^2)^3
 
   P22Vector p22coeffs;
   P3Vector p3coeffs;
-  std::vector<la_index> dofsT;
-  dofsT.reserve(12);
+  std::vector<la_index> dofsT(12);
   for (CellIterator cell(*(W->mesh())); !cell.end(); ++cell) {
     update(*cell);
     auto index = cell->index();

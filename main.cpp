@@ -422,8 +422,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
   std::cout << "Projecting force onto W^3... ";
   tic();
   auto force = std::make_shared<Force>();
-  auto f = std::shared_ptr<const Function>(std::move(project_dkt(force,
-                                                                 W3)));
+  auto f = std::shared_ptr<const Function>(std::move(eval_dkt(force, W3)));
   table("Projection of data", "time") =
     table.get_value("Projection of data", "time") + toc();
   std::cout << "Done.\n";
@@ -527,7 +526,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
     // This isn't exactly elegant...
     Ao->mult(*(y.vector()), *top_Fk);  // Careful! use the copy Ao
     *top_Fk *= -alpha;
-    top_Fk->axpy(tau, *(L.vector()));
+    top_Fk->axpy(tau, *(L.vector()));  // Don't forget to scale the force by tau
     bc.apply(*top_Fk);
     Fk.read(0);
     table("RHS computation", "time") =
