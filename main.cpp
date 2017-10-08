@@ -25,7 +25,7 @@ namespace NLK { using namespace NonlinearKirchhoff; }
 
 const double LEFT = -2.0, RIGHT = 2.0, BOTTOM = 0.0, TOP = 1.0;
 
-class Force : public Expression
+class Force : public DiffExpression
 {
   void eval(Array<double>& values, const Array<double>& x) const
   {
@@ -33,6 +33,14 @@ class Force : public Expression
     values[1] = 0;
     values[2] = 1e-5;
   }
+  
+  void
+  gradient(Array<double>& grad, const Array<double>& x) const override {
+    grad[0] = 0.0; grad[1] = 0.0;
+    grad[2] = 0.0; grad[3] = 0.0;
+    grad[4] = 0.0; grad[5] = 0.0;
+  }
+  
   std::size_t value_rank() const { return 1; }
   std::size_t value_dimension(std::size_t i) const { return 3;}
 };
