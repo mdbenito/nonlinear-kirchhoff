@@ -109,7 +109,7 @@ namespace NLK {
     for (int i = 0; i < m; ++i) {
       for (int j = 0; j < n-1; ++j)
         *out << A[n*i + j] << " ";
-      *out << A[n*i + n] << std::endl;
+      *out << A[n*i + n-1] << std::endl;
     }
   }
 
