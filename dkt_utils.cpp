@@ -181,4 +181,21 @@ namespace dolfin
     
     return ret;
   }
+
+  void
+  round_zeros(GenericVector& v, double precision)
+  {
+    auto range = v.local_range();
+    auto numrows = range.second - range.first;
+    std::vector<la_index> rows(numrows);
+    std::iota(rows.begin(), rows.end(), 0);
+    std::vector<double> block(numrows);
+    v.get_local(block.data(), numrows, rows.data());
+
+    std::transform(block.begin(), block.end(), block.begin(),
+                   [] (double v) -> double {
+                     return (std::abs(v) < 1e-8) ? 0.0 : v;
+                   });
+    v.set_local(block.data(), numrows, rows.data());
+  }
 }
