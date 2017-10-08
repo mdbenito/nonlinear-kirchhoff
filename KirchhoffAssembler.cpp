@@ -94,7 +94,7 @@ void KirchhoffAssembler::assemble_cells(
   // assert(form_rank == a.rank());
   // assert(form_rank == 2);
   
-  int range_dim = 3;  // MBD HACK
+  const int range_dim = 3;  // MBD HACK: DKTGradient assumes dim = 3
   
   // Collect pointers to dof maps
   // MBD We use the DKT form 'a' here, so this is ok
@@ -182,15 +182,15 @@ void KirchhoffAssembler::assemble_cells(
                               coordinate_dofs.data(),
                               ufc_cell.orientation);
 
-    // dump_raw_matrix(ufc.A, 36, 36, 4, "Local tensor", false);
-    
+    // dump_raw_matrix(ufc.A, 36, 36, 4, "P22", true, true);
+
     // split ufc.A in three blocks A_ii
-    const auto& data = ufc.A.data();
+    const double* data = ufc.A.data();
     for(auto j = 0; j < range_dim; ++j)
     {
       // std::cout << "Applying DKT gradient to component " << j << "... ";
 
-      // HACK! We use an Eigen::OuterStride<24> in DKTGradient.apply()
+      // We use an Eigen::OuterStride<range_dim*12> in DKTGradient.apply()
       // to map chunks of the local tensor data into 12x12 matrices to
       // multiply by.
       grad.apply(data + j*12*12*range_dim + j*12, D);

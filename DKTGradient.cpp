@@ -44,13 +44,13 @@ DKTGradient::permutation_hack(DKTGradient::M_t& M, bool undo)
   Eigen::Matrix<double, 12, 12, Eigen::RowMajor> P;
   P.setZero();
   
-  // position in array is destination row, value is source row:
-  int permutations[12];
   if (undo) {
+    // position in array is destination row, value is source row:
     int permutations[] = {0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11};
     for (int i = 0; i < 12; ++i)
       P(permutations[i], i) = 1.0;
   } else {
+    // position in array is destination row, value is source row:
     int permutations[] = {0, 6, 1, 7, 2, 8, 3, 9, 4, 10, 5, 11};
     for (int i = 0; i < 12; ++i)
       P(permutations[i], i) = 1.0;
@@ -155,9 +155,12 @@ DKTGradient::apply(const double* p22tensor_data, P3Tensor& dkttensor)
   Eigen::Map<Eigen::Matrix<double, 9, 9, Eigen::RowMajor>>
       dkt(dkttensor.data());
 
-  // Eigen::Matrix<double, 12, 12, Eigen::RowMajor> tmp(p22);
-  // dump_raw_matrix(tmp.data(), 12, 12, "DKT", false);
-
+//  static int cnt = 0;
+//  Eigen::Matrix<double, 12, 12, Eigen::RowMajor> tmp(p22);
+//  std::stringstream ss;
+//  ss << "P22-" << std::setfill('0') << std::setw(4) << cnt++ << ".data";
+//  NLK::dump_raw_matrix(tmp.data(), 12, 12, 4, ss.str(), true, true);
+  
   dkt = _Mt * p22 * _M;
 }
 

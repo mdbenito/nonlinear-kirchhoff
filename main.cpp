@@ -339,8 +339,7 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
   // condition, which should fulfill the BC
   auto bdry = std::make_shared<LateralBoundary>();
   auto zero = std::shared_ptr<Function>
-    (std::move(project_dkt(std::make_shared<Constant>(0.0, 0.0, 0.0),
-                           W3)));
+    (std::move(project_dkt(std::make_shared<Constant>(0.0, 0.0, 0.0), W3)));
   DirichletBC bc(W3, zero, bdry);
 
   Table table("Compute times");
