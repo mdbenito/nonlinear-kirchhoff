@@ -237,6 +237,7 @@ test_DKT(void)
 
 class IdentityDiff : public DiffExpression
 {
+public:
   void eval(Array<double>& values, const Array<double>& x) const
   {
     values[0] = x[0];
