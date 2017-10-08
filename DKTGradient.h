@@ -52,7 +52,7 @@ public:
    * dim is the number of subspaces this gradient will operate on,
    * one by one.
    */
-  DKTGradient(int dim=3);
+  DKTGradient();
 
   /* Updates the operator matrix for the given Cell */
   void update(const dolfin::Cell& cell);
@@ -102,7 +102,7 @@ public:
 protected:
   M_t   _M;  // cell-local gradient matrix
   Mt_t _Mt;  // cell-local transposed gradient matrix
-  int _dim;  // range dimension
+  static const int _dim = 3;  // range dimension
 };
 }
 

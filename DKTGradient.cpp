@@ -9,8 +9,7 @@
 
 using namespace dolfin;
 
-DKTGradient::DKTGradient(int dim)
-  : _dim(dim)
+DKTGradient::DKTGradient()
 {
   // Setting the OuterStride needs testing!
   
@@ -152,8 +151,7 @@ void
 DKTGradient::apply(const double* p22tensor_data, P3Tensor& dkttensor)
 {
   Eigen::Map<const Eigen::Matrix<double, 12, 12, Eigen::RowMajor>,
-             0, Eigen::OuterStride<>> p22(p22tensor_data,
-                                          Eigen::OuterStride<>(_dim*12));
+             0, Eigen::OuterStride<_dim*12>> p22(p22tensor_data);
   Eigen::Map<Eigen::Matrix<double, 9, 9, Eigen::RowMajor>>
       dkt(dkttensor.data());
 
