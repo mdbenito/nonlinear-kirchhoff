@@ -13,7 +13,20 @@
 #include "dkt_utils.h"
 
 using namespace dolfin;
-namespace NLK { using namespace NonlinearKirchhoff; }
+namespace NLK { 
+  using namespace NonlinearKirchhoff;
+
+  template<>
+  std::string
+  v2s<Array<double>>(const Array<double>& a, int precision)
+  {
+    std::stringstream ss;
+    ss << std::setprecision(precision);
+    for (int i = 0; i < a.size(); ++i)
+      ss << a[i] << " ";
+    return ss.str();
+  }
+}
 
 //////////////////////////////////////////////////////////////////////
 // FIXME!!! THIS IS COPIED & PASTED FROM main.cpp. FACTOR OUT!      //
@@ -203,9 +216,9 @@ test_DKT(void)
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.6667, -0.6667, 0.0, 0.0, -1.3333, 2.6667 };
 
   DKTGradient::P3Tensor D;
-//  DKTGradient::permutation_hack(dg._M, true); // HACK!!!!
+  DKTGradient::permutation_hack(dg._M, true); // HACK!!!!
   dg.apply(p22tensor, D);
-//  DKTGradient::permutation_hack(dg._M); // UNDO HACK!!!!
+  DKTGradient::permutation_hack(dg._M); // UNDO HACK!!!!
   
   DKTGradient::P3Tensor D_ok = {
     10.3125, 1.5312, 1.1563, -11.0625, 1.75, 0.9062, 0.75, -0.2188, 0.0625, 
@@ -257,31 +270,9 @@ public:
   std::size_t value_dimension(std::size_t i) const { return 3;}
 };
 
-int
-test_DKT_identity()
-{
-  auto mesh = std::make_shared<UnitSquareMesh>(MPI_COMM_WORLD,
-                                              32, 32, "crossed");
-  auto W3 = std::make_shared<NLK::Form_dkt_FunctionSpace_0>(mesh);
-  auto id = std::shared_ptr<Function>
-      (std::move(project_dkt(std::make_shared<IdentityDiff>(), W3)));
-  auto idd = std::shared_ptr<Function>
-      (std::move(eval_dkt(std::make_shared<IdentityDiff>(), W3)));
-  
-  auto diff = dofs_which_differ(id, idd, 1e-8);
-  if (diff->size() > 0) {
-    std::cout << diff->size() << " dofs differ: ";
-    for (auto d : *diff)
-      std::cout << d << " ";
-    std::cout << "\n";
-  } else {
-    std::cout << "dof test ok for identity. \n";
-  }
-  return diff->size();
-}
-
 class Poly2Diff : public DiffExpression
 {
+public:
   void eval(Array<double>& values, const Array<double>& x) const
   {
     values[0] = x[0] * x[0] + 5*x[1] * x[1];
@@ -302,24 +293,83 @@ class Poly2Diff : public DiffExpression
 };
 
 int
-test_DKT_polynomial()
+test_DKT_expression(std::shared_ptr<DiffExpression> fexp)
 {
-  auto mesh = std::make_shared<UnitSquareMesh>(MPI_COMM_WORLD,
-                                              32, 32, "crossed");
-  auto W3 = std::make_shared<NLK::Form_dkt_FunctionSpace_0>(mesh);
-  auto f = std::shared_ptr<Function>
-      (std::move(project_dkt(std::make_shared<Poly2Diff>(), W3)));
-  auto fd = std::shared_ptr<Function>
-      (std::move(eval_dkt(std::make_shared<Poly2Diff>(), W3)));
+  double eps = 1e-8;
+  bool ok = true;
   
-  auto diff = dofs_which_differ(f, fd, 1e-8);
-  if (diff->size() > 0) {
-    std::cout << diff->size() << " dofs differ: ";
-    for (auto d : *diff)
+  auto mesh = std::make_shared<UnitSquareMesh>(MPI_COMM_WORLD,
+                                              4, 4, "right");
+  auto W3 = std::make_shared<NLK::Form_dkt_FunctionSpace_0>(mesh);
+  auto T3 = std::make_shared<NLK::Form_p26_FunctionSpace_0>(mesh);  
+  auto f = std::shared_ptr<Function>(std::move(project_dkt(fexp, W3)));
+  auto fd = std::shared_ptr<Function>(std::move(eval_dkt(fexp, W3)));
+  
+  auto ddofs = dofs_which_differ(f, fd, eps);
+  ok = ok && ddofs->size() == 0;
+  
+  if (ddofs->size() > 0) {
+    std::cout << ddofs->size() << " dofs differ: ";
+    for (auto d : *ddofs)
       std::cout << d << " ";
     std::cout << "\n";
   } else {
-    std::cout << "dof test ok for polynomial.\n";
+    std::cout << "dof test ok.\n";
   }
-  return diff->size();
+  
+  DKTGradient dg;
+  auto gradvec = std::shared_ptr<Vector>
+      (std::move(dg.apply_vec(T3, W3, fd->vector())));
+  Function grad(T3, gradvec);
+  
+  Array<double> values_grad(6), values_gradexp(6);
+  auto dist = [](const Array<double>& a, const Array<double>& b) -> double {
+    double d = 0.0;
+    for(int i=0; i<6; ++i)
+      d += (a[i]-b[i])*(a[i]-b[i]);
+    return d;
+  };
+
+  double diff = 0.0;
+  for (VertexIterator vit(*mesh); !vit.end(); ++vit) {
+      // HACK! careful not to touch the data
+    Array<double> coord(2, const_cast<double *>(vit->x()));
+//    std::cout << "x = " << NLK::v2s(coord, 2) << "\n";
+    fexp->gradient(values_gradexp, coord);
+//    std::cout << "gradexp = " << NLK::v2s(values_gradexp, 3) << "\n";
+    grad.eval(values_grad, coord);
+//    std::cout << "dktgrad = " << NLK::v2s(values_grad, 3) << "\n";
+    diff += dist(values_gradexp, values_grad);
+  }
+  diff = std::sqrt(diff);
+  if (diff > eps)
+    std::cout << "Computed and analytic gradient differ by = " << diff << ".\n";
+  else
+    std::cout << "Computed and analytic gradient agree.\n";
+
+  ok = ok && diff < eps;
+  
+  return ok ? 0 : 1;
+}
+
+
+int
+test_DKT_identity()
+{
+  auto id = std::make_shared<IdentityDiff>();
+  return test_DKT_expression(id);
+}
+
+int
+test_DKT_polynomial()
+{
+  auto poly = std::make_shared<Poly2Diff>();
+  return test_DKT_expression(poly);
+}
+
+
+int
+test_initial_condition(std::shared_ptr<const Function> f)
+{
+  
 }

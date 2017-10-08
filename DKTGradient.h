@@ -92,7 +92,7 @@ public:
   std::unique_ptr<dolfin::Vector>
   apply_vec(std::shared_ptr<const dolfin::FunctionSpace> T,
             std::shared_ptr<const dolfin::FunctionSpace> W,
-            std::shared_ptr<const dolfin::Vector> dktfun);
+            std::shared_ptr<const dolfin::GenericVector> dktfun);
 
   static void
   permutation_hack(DKTGradient::M_t& M, bool undo = false);

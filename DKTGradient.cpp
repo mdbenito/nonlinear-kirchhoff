@@ -174,48 +174,59 @@ DKTGradient::apply_vec(const P3Vector& p3coeffs, P22Vector& p22coeffs)
 std::unique_ptr<Vector>
 DKTGradient::apply_vec(std::shared_ptr<const FunctionSpace> T,   // (P2^2)^3
                        std::shared_ptr<const FunctionSpace> W,   // DKT^3
-                       std::shared_ptr<const Vector> dktvec)
+                       std::shared_ptr<const GenericVector> dktvec)
 {
   std::unique_ptr<Vector> vec(new Vector(MPI_COMM_WORLD, T->dim()));
 
   P22Vector p22coeffs;
-  auto p3coeffs = std::vector<double>(12);
-  auto mesh = W->mesh();
-
-  P3Vector block;
-
-  for (CellIterator cell(*mesh); !cell.end(); ++cell)
-  {
+  P3Vector p3coeffs;
+  std::vector<la_index> dofsT;
+  dofsT.reserve(12);
+  for (CellIterator cell(*(W->mesh())); !cell.end(); ++cell) {
     update(*cell);
-    for (int i = 0; i < _dim; ++i) {
-      // std::cout << "\nSubspace " << i << "\n";
+    auto index = cell->index();
+//    std::vector<double> coordinates;
+    // FIXME: get_coordinate_dofs() doesn't return the coordinates for the
+    // dofs on the middle points of the sides of the cell, only the vertices(?!)
+//    cell->get_coordinate_dofs(coordinates);
+//    std::cout << "\nCell " << index
+//              << ", coordinates: " << NLK::v2s(coordinates) << ".\n";
+    for (int sub = 0; sub < _dim; ++sub) {
+//      std::cout << "Subspace " << sub << "\n";
       // 1. extract dofs for cell using W's dofmap
-      auto dmW = W->sub(i)->dofmap().get();
-      auto dofsW = dmW->cell_dofs(cell->index());
-      // std::cout << "Got dofs: " << v2s(dofsW) << "\n";
-      // 1.1 Check ranges for parallel ???
-      // auto range = vec->local_range();
-      // std::cout << "Range: " << range.first << " to "
-      //           << range.second << "\n";
-      // 2. extract local coeffs from dktfun for this cell
-      assert(block.size() == dofsW.size());
-      dktvec->get(block.data(), dofsW.size(), dofsW.data());
-      // std::cout << "Got local: " << v2s(block) << "\n";
+      auto   dmW = W->sub(sub)->dofmap().get();
+      auto dofsW = dmW->cell_dofs(index);
+//      std::cout << "W3 dofs: " << NLK::v2s(dofsW) << "\n";
+      
+      // 1.1 TODO?? Check ranges for parallel
+//      auto range = vec->local_range();
+//      std::cout << "Range: " << range.first << " to "
+//                << range.second << "\n";
+      
+      // 2. extract local coefficients from dktfun for this cell
+      dolfin_assert(p3coeffs.size() == dofsW.size());
+      dktvec->get(p3coeffs.data(), dofsW.size(), dofsW.data());
+//      std::cout << "Got local: " << NLK::v2s(p3coeffs, 3) << "\n";
+      
       // 3. Compute local DKT gradient for this cell and subspace
-      apply_vec(block, p22coeffs);
-      // std::cout << "Computed local: " << v2s(p22coeffs) << "\n";
-      // 4. Insert coeffs into fun using T's dofmap
-      auto dmT = T->sub(i)->dofmap().get();
-      auto dofsT = dmT->cell_dofs(cell->index());
-      // std::cout << "Set dofs: " << v2s(dofsT) << "\n";
-      assert(p22coeffs.size() == dofsT.size());
-      vec->set(p22coeffs.data(), dofsT.size(), dofsT.data());
-      // std::cout << "Done.\n";
+      apply_vec(p3coeffs, p22coeffs);
+//      std::cout << "Computed local: " << NLK::v2s(p22coeffs, 3) << "\n";
+      
+      // 4. Insert coefficients into fun using T's dofmap
+      auto dmTx = T->sub(2*sub)->dofmap().get();
+      auto dmTy = T->sub(2*sub+1)->dofmap().get();
+      auto dofsTx = dmTx->cell_dofs(index);
+      auto dofsTy = dmTy->cell_dofs(index);
+      dofsT.insert(dofsT.begin(), dofsTx.data(), dofsTx.data()+6);
+      dofsT.insert(dofsT.begin()+6, dofsTy.data(), dofsTy.data()+6);
+//      std::cout << "Set dofs: " << NLK::v2s(dofsT) << "\n";
+      vec->set(p22coeffs.data(), 12, dofsT.data());
+//      std::cout << "Done.\n";
       // 4.1 Check ranges for parallel ???
     }
   }
-  // std::cout << "Apllying all...";
+//  std::cout << "Applying all... ";
   vec->apply("insert");
-  // std::cout << " Done.\n";
+//  std::cout << "Done.\n";
   return vec;
 }
