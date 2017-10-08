@@ -264,7 +264,8 @@ hack_boundary_values(const SubDomain& subdomain, Function& u)
 }
 
 bool
-equal_at_p(const SubDomain& subdomain, const Function& u, const Function& v)
+equal_at_p(const SubDomain& subdomain, const Function& u, const Function& v,
+           double eps=1e-6)
 {
   /// Extract info and ensure the mesh (connectivity) has been initialised
   auto W = v.function_space();
@@ -305,10 +306,12 @@ equal_at_p(const SubDomain& subdomain, const Function& u, const Function& v)
                    });
     // Test values for facet
     la_index numrows = facet_dofs.size();
-    std::vector<double> uvalues(numrows), vvalues(numrows);
-    u.vector()->get(uvalues.data(), numrows, facet_dofs.data());
-    v.vector()->get(vvalues.data(), numrows, facet_dofs.data());
-    if (uvalues != vvalues)
+    std::vector<double> uu(numrows), vv(numrows);
+    u.vector()->get(uu.data(), numrows, facet_dofs.data());
+    v.vector()->get(vv.data(), numrows, facet_dofs.data());
+    auto absdiff = [] (double x, double y) -> double { return std::abs(x-y); };
+    std::transform(uu.begin(), uu.end(), vv.begin(), vv.begin(), absdiff);
+    if (std::accumulate(vv.begin(), vv.end(), 0.0) > eps)
       return false;
   }
   return true;
