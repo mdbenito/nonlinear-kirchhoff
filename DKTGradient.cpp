@@ -185,32 +185,27 @@ DKTGradient::apply_vec(std::shared_ptr<const FunctionSpace> T,   // (P2^2)^3
   for (CellIterator cell(*(W->mesh())); !cell.end(); ++cell) {
     update(*cell);
     auto index = cell->index();
-//    std::vector<double> coordinates;
     // FIXME: get_coordinate_dofs() doesn't return the coordinates for the
     // dofs on the middle points of the sides of the cell, only the vertices(?!)
-//    cell->get_coordinate_dofs(coordinates);
-//    std::cout << "\nCell " << index
-//              << ", coordinates: " << NLK::v2s(coordinates) << ".\n";
+    //std::vector<double> coordinates;
+    //cell->get_coordinate_dofs(coordinates);
+    //std::cout << "\nCell " << index
+    //          << ", coordinates: " << NLK::v2s(coordinates) << ".\n";
+    
     for (int sub = 0; sub < _dim; ++sub) {
-//      std::cout << "Subspace " << sub << "\n";
       // 1. extract dofs for cell using W's dofmap
       auto   dmW = W->sub(sub)->dofmap().get();
       auto dofsW = dmW->cell_dofs(index);
-//      std::cout << "W3 dofs: " << NLK::v2s(dofsW) << "\n";
       
       // 1.1 TODO?? Check ranges for parallel
-//      auto range = vec->local_range();
-//      std::cout << "Range: " << range.first << " to "
-//                << range.second << "\n";
+      //auto range = vec->local_range();
       
       // 2. extract local coefficients from dktfun for this cell
       dolfin_assert(p3coeffs.size() == dofsW.size());
       dktvec->get(p3coeffs.data(), dofsW.size(), dofsW.data());
-//      std::cout << "Got local: " << NLK::v2s(p3coeffs, 3) << "\n";
       
       // 3. Compute local DKT gradient for this cell and subspace
       apply_vec(p3coeffs, p22coeffs);
-//      std::cout << "Computed local: " << NLK::v2s(p22coeffs, 3) << "\n";
       
       // 4. Insert coefficients into fun using T's dofmap
       auto dmTx = T->sub(2*sub)->dofmap().get();
@@ -219,14 +214,22 @@ DKTGradient::apply_vec(std::shared_ptr<const FunctionSpace> T,   // (P2^2)^3
       auto dofsTy = dmTy->cell_dofs(index);
       dofsT.insert(dofsT.begin(), dofsTx.data(), dofsTx.data()+6);
       dofsT.insert(dofsT.begin()+6, dofsTy.data(), dofsTy.data()+6);
-//      std::cout << "Set dofs: " << NLK::v2s(dofsT) << "\n";
       vec->set(p22coeffs.data(), 12, dofsT.data());
-//      std::cout << "Done.\n";
+      
       // 4.1 Check ranges for parallel ???
+      
+      // poor man's debug:
+//      std::cout << "Subspace " << sub << "\n";
+//      std::cout << "W3 dofs: " << NLK::v2s(dofsW) << "\n";
+//      std::cout << "Range: " << range.first << " to "
+//                << range.second << "\n";
+//      std::cout << "Got local: " << NLK::v2s(p3coeffs, 3) << "\n";
+//      std::cout << "Computed local: " << NLK::v2s(p22coeffs, 3) << "\n";
+//      std::cout << "Set dofs: " << NLK::v2s(dofsT) << "\n";
+//      std::cout << "Done.\n";
     }
   }
-//  std::cout << "Applying all... ";
+  
   vec->apply("insert");
-//  std::cout << "Done.\n";
   return vec;
 }
