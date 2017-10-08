@@ -16,8 +16,11 @@ namespace dolfin
   {
     auto W3 = y.function_space();
     auto mesh = W3->mesh();
-    std::vector<la_index> dxdofs, dydofs;
+    auto N = mesh->num_vertices();
     auto v2d = vertex_to_dof_map(*W3);
+    std::vector<la_index> dxdofs, dydofs;
+    dxdofs.reserve(N*3);
+    dydofs.reserve(N*3);
     for (int sub = 0; sub < 3; ++sub) {
       // auto dm = (*W3)[sub]->dofmap();
       // The following should be a process-local index
@@ -29,15 +32,16 @@ namespace dolfin
         dydofs.push_back(dofdy);
       }
     }
-    std::vector<double> dx(dxdofs.size()), dy(dydofs.size());
+    std::vector<double> dx, dy;
+    dx.reserve(dxdofs.size());
+    dy.reserve(dydofs.size());
     y.vector()->get(dx.data(), dxdofs.size(), dxdofs.data());
     y.vector()->get(dy.data(), dydofs.size(), dydofs.data());
 
     double dxdx = std::inner_product(dx.begin(), dx.end(), dx.begin(), 0),
-        dxdy = std::inner_product(dx.begin(), dx.end(), dy.begin(), 0),
-        dydy = std::inner_product(dy.begin(), dy.end(), dy.begin(), 0);
+           dxdy = std::inner_product(dx.begin(), dx.end(), dy.begin(), 0),
+           dydy = std::inner_product(dy.begin(), dy.end(), dy.begin(), 0);
     // subtract identity at each vertex
-    auto N = mesh->num_vertices();
     double frobsq = (std::pow(dxdx - N, 2) +
                      std::pow(dydy - N, 2) +
                      2 * std::pow(dxdy, 2)) / N;
@@ -49,16 +53,24 @@ namespace dolfin
            std::shared_ptr<const FunctionSpace> W3)
   {
     auto mesh = W3->mesh();
+    auto N = mesh->num_vertices();
     std::vector<la_index> evdofs, dxdofs, dydofs;
+    evdofs.reserve(N*3);
+    dxdofs.reserve(N*3);
+    dydofs.reserve(N*3);
     std::vector<double> evvals, dxvals, dyvals;
+    evvals.reserve(N*3);
+    dxvals.reserve(N*3);
+    dyvals.reserve(N*3);
     Array<double> values(3), grad(6);
     auto v2d = vertex_to_dof_map(*W3);
     for (VertexIterator vit(*mesh); !vit.end(); ++vit) {
-      fexp->eval(values, Array<double>(2, const_cast<double*>(vit->x())));
-      fexp->gradient(grad, Array<double>(2, const_cast<double*>(vit->x())));
+      Array<double>(2, const_cast<double*> coord(vit->x()));
+      fexp->eval(values, coord);
+      fexp->gradient(grad, coord);
+      // The following should be a process-local index
+      auto idx = static_cast<la_index> (vit->index());
       for (int sub=0; sub < 3; ++sub) {
-        // The following should be a process-local index
-        auto idx = static_cast<la_index>(vit->index());
         auto dofev = v2d[9*idx + 3*sub + 0];
         auto dofdx = v2d[9*idx + 3*sub + 1];
         auto dofdy = v2d[9*idx + 3*sub + 2];
@@ -108,8 +120,9 @@ namespace dolfin
   std::unique_ptr<std::vector<la_index>>
   nodal_indices(std::shared_ptr<const FunctionSpace> W3)
   {
-    int N = W3->dim() / 3;
-    std::unique_ptr<std::vector<la_index>> indices(new std::vector<la_index>(N));
+    int N = W3->mesh()->num_vertices();
+    std::unique_ptr<std::vector<la_index>> indices(new std::vector<la_index>());
+    indices->reserve(N);
     auto v2d = vertex_to_dof_map(*W3);
     for (VertexIterator v(*(W3->mesh())); !v.end(); ++v) {
       // The following should be a process-local index
@@ -128,8 +141,11 @@ namespace dolfin
             std::shared_ptr<const FunctionSpace> W3)
   {
     assert(v1->size() == v2->size());
-    const auto& indices = nodal_indices(W3);  // FIXME: call only once!
-    std::vector<double> vals1(indices->size()), vals2(indices->size());
+    // FIXME: call only once, not at every inner product!
+    const auto& indices = nodal_indices(W3);
+    std::vector<double> vals1, vals2;
+    vals1.reserve(indices->size());
+    vals2.reserve(indices->size());
     v1->get_local(vals1.data(), indices->size(), indices->data());
     v2->get_local(vals2.data(), indices->size(), indices->data());  
 
@@ -148,13 +164,16 @@ namespace dolfin
                     double eps)
   {
     dolfin_assert(f->function_space() == g->function_space());
-
+    
     auto u = f->vector();
     auto v = g->vector();
     auto dim = f->function_space()->dim();
-    std::vector<la_index> dofs(dim);
+    std::vector<la_index> dofs;
+    dofs.reserve(dim);
     std::iota(dofs.begin(), dofs.end(), 0);
-    std::vector<double> uu(dim), vv(dim);
+    std::vector<double> uu, vv;
+    uu.reserve(dim);
+    vv.reserve(dim);
     u->get(uu.data(), dofs.size(), dofs.data());
     v->get(vv.data(), dofs.size(), dofs.data());
     
