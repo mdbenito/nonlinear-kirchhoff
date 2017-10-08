@@ -65,7 +65,7 @@ namespace dolfin
     Array<double> values(3), grad(6);
     auto v2d = vertex_to_dof_map(*W3);
     for (VertexIterator vit(*mesh); !vit.end(); ++vit) {
-      Array<double>(2, const_cast<double*> coord(vit->x()));
+      Array<double> coord(2, const_cast<double*>(vit->x()));
       fexp->eval(values, coord);
       fexp->gradient(grad, coord);
       // The following should be a process-local index
