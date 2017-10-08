@@ -48,7 +48,6 @@ project(std::shared_ptr<const GenericFunction> what,
   return f;
 }
 
-
 /// TODO: make this into an automated regression test
 int
 test_dofs()
@@ -76,7 +75,6 @@ test_dofs()
 
   return 0;
 }
-
 
 /// TODO: make this into an automated regression test
 int
@@ -281,8 +279,8 @@ public:
   }
 
   /// Gradient is stored in row format: f_11, f_12, f_21, f_22, f_31, f_32
-  void gradient(Array<double>& grad, const Array<double>& x) const
-  {
+  void 
+  gradient(Array<double>& grad, const Array<double>& x) const override {
     grad[0] = 2.0*x[0]; grad[1] = 10.0*x[1];
     grad[2] = x[1];     grad[3] = x[0];
     grad[4] = 1.0;      grad[5] = 3.0;
@@ -293,37 +291,60 @@ public:
 };
 
 int
+test_DKT_projection()
+{
+  double eps = 1e-8;
+  auto  fexp = std::make_shared<Poly2Diff>();
+  auto  mesh = std::make_shared<UnitSquareMesh>(MPI_COMM_WORLD, 4, 4, "right");
+  auto    W3 = std::make_shared<NLK::Form_dkt_FunctionSpace_0>(mesh);
+  auto     f = std::shared_ptr<Function>(std::move(project_dkt(fexp, W3)));
+  auto    fd = std::shared_ptr<Function>(std::move(eval_dkt(fexp, W3)));
+
+  auto ddofs = dofs_which_differ(f, fd, eps);
+  bool ok = ddofs->size() == 0;
+  
+  if (! ok) {
+    std::cout << "dof test FAILED.\n";
+/*  std::vector<double> valsf(ddofs->size()), valsfd(ddofs->size());
+    f->vector()->get(valsf.data(), ddofs->size(), ddofs->data());
+    fd->vector()->get(valsfd.data(), ddofs->size(), ddofs->data());
+    std::cout << "dofs: " << NLK::v2s(*ddofs) << "\n";
+    std::cout << "f: " << NLK::v2s(valsf, 2) << "\n";
+    std::cout << "fd: " << NLK::v2s(valsfd, 2) << "\n";
+    
+    std::vector<double> allf(W3->dim()), allfd(W3->dim());
+    std::vector<la_index> alldofs(W3->dim());
+    std::iota(alldofs.begin(), alldofs.end(), 0);
+    f->vector()->get(allf.data(), alldofs.size(), alldofs.data());
+    fd->vector()->get(allfd.data(), alldofs.size(), alldofs.data());
+    std::cout << "f: " << NLK::v2s(allf, 2) << "\n";
+    std::cout << "fd: " << NLK::v2s(allfd, 2) << "\n"; */
+  } else {
+    std::cout << "dof test ok.\n";
+  }
+  
+  return ok ? 0 : 1;
+}
+
+int
 test_DKT_expression(std::shared_ptr<DiffExpression> fexp)
 {
   double eps = 1e-8;
   bool ok = true;
   
-  auto mesh = std::make_shared<UnitSquareMesh>(MPI_COMM_WORLD,
-                                              4, 4, "right");
+  auto mesh = std::make_shared<UnitSquareMesh>(MPI_COMM_WORLD, 4, 4, "right");
   auto W3 = std::make_shared<NLK::Form_dkt_FunctionSpace_0>(mesh);
   auto T3 = std::make_shared<NLK::Form_p26_FunctionSpace_0>(mesh);  
-  auto f = std::shared_ptr<Function>(std::move(project_dkt(fexp, W3)));
-  auto fd = std::shared_ptr<Function>(std::move(eval_dkt(fexp, W3)));
-  
-  auto ddofs = dofs_which_differ(f, fd, eps);
-  ok = ok && ddofs->size() == 0;
-  
-  if (ddofs->size() > 0) {
-    std::cout << ddofs->size() << " dofs differ: ";
-    for (auto d : *ddofs)
-      std::cout << d << " ";
-    std::cout << "\n";
-  } else {
-    std::cout << "dof test ok.\n";
-  }
+  auto f = std::shared_ptr<Function>(std::move(eval_dkt(fexp, W3)));
   
   DKTGradient dg;
   auto gradvec = std::shared_ptr<Vector>
-      (std::move(dg.apply_vec(T3, W3, fd->vector())));
+                 (std::move(dg.apply_vec(T3, W3, f->vector())));
   Function grad(T3, gradvec);
   
   Array<double> values_grad(6), values_gradexp(6);
-  auto dist = [](const Array<double>& a, const Array<double>& b) -> double {
+  auto dist = [](const Array<double>& a, const Array<double>& b) -> double
+  {
     double d = 0.0;
     for(int i=0; i<6; ++i)
       d += (a[i]-b[i])*(a[i]-b[i]);
@@ -334,24 +355,24 @@ test_DKT_expression(std::shared_ptr<DiffExpression> fexp)
   for (VertexIterator vit(*mesh); !vit.end(); ++vit) {
       // HACK! careful not to touch the data
     Array<double> coord(2, const_cast<double *>(vit->x()));
-//    std::cout << "x = " << NLK::v2s(coord, 2) << "\n";
     fexp->gradient(values_gradexp, coord);
-//    std::cout << "gradexp = " << NLK::v2s(values_gradexp, 3) << "\n";
     grad.eval(values_grad, coord);
-//    std::cout << "dktgrad = " << NLK::v2s(values_grad, 3) << "\n";
     diff += dist(values_gradexp, values_grad);
+    
+//    std::cout << "x = " << NLK::v2s(coord, 2) << "\n";
+//    std::cout << "gradexp = " << NLK::v2s(values_gradexp, 3) << "\n";
+//    std::cout << "dktgrad = " << NLK::v2s(values_grad, 3) << "\n";
   }
   diff = std::sqrt(diff);
-  if (diff > eps)
+  ok = diff < eps;
+  
+  if (!ok)
     std::cout << "Computed and analytic gradient differ by = " << diff << ".\n";
   else
     std::cout << "Computed and analytic gradient agree.\n";
 
-  ok = ok && diff < eps;
-  
   return ok ? 0 : 1;
 }
-
 
 int
 test_DKT_identity()
@@ -366,7 +387,6 @@ test_DKT_polynomial()
   auto poly = std::make_shared<Poly2Diff>();
   return test_DKT_expression(poly);
 }
-
 
 int
 test_initial_condition(std::shared_ptr<const Function> f)
