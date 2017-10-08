@@ -32,9 +32,7 @@ namespace dolfin
         dydofs.push_back(dofdy);
       }
     }
-    std::vector<double> dx, dy;
-    dx.reserve(dxdofs.size());
-    dy.reserve(dydofs.size());
+    std::vector<double> dx(dxdofs.size()), dy(dydofs.size());
     y.vector()->get(dx.data(), dxdofs.size(), dxdofs.data());
     y.vector()->get(dy.data(), dydofs.size(), dydofs.data());
 
@@ -143,11 +141,10 @@ namespace dolfin
     assert(v1->size() == v2->size());
     // FIXME: call only once, not at every inner product!
     const auto& indices = nodal_indices(W3);
-    std::vector<double> vals1, vals2;
-    vals1.reserve(indices->size());
-    vals2.reserve(indices->size());
-    v1->get_local(vals1.data(), indices->size(), indices->data());
-    v2->get_local(vals2.data(), indices->size(), indices->data());  
+    auto N = indices->size();
+    std::vector<double> vals1(N), vals2(N);
+    v1->get_local(vals1.data(), N, indices->data());
+    v2->get_local(vals2.data(), N, indices->data());  
 
     return std::inner_product(vals1.begin(), vals1.end(), vals2.begin(), 0.0);
   }
@@ -168,12 +165,9 @@ namespace dolfin
     auto u = f->vector();
     auto v = g->vector();
     auto dim = f->function_space()->dim();
-    std::vector<la_index> dofs;
-    dofs.reserve(dim);
+    std::vector<la_index> dofs(dim);
     std::iota(dofs.begin(), dofs.end(), 0);
-    std::vector<double> uu, vv;
-    uu.reserve(dim);
-    vv.reserve(dim);
+    std::vector<double> uu(dim), vv(dim);
     u->get(uu.data(), dofs.size(), dofs.data());
     v->get(vv.data(), dofs.size(), dofs.data());
     
