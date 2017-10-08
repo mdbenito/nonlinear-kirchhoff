@@ -171,7 +171,7 @@ namespace dolfin
     u->get(uu.data(), dofs.size(), dofs.data());
     v->get(vv.data(), dofs.size(), dofs.data());
     
-    auto absdiff = [] (double x, double y) -> int { return std::abs(x-y); };
+    auto absdiff = [] (double x, double y) -> double { return std::abs(x-y); };
     std::transform(uu.begin(), uu.end(), vv.begin(), vv.begin(), absdiff);
     
     std::unique_ptr<std::vector<la_index>> ret(new std::vector<la_index>());
