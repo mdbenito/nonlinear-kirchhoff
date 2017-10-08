@@ -4,6 +4,7 @@
 #include <string>
 #include <iostream>
 #include <sstream>
+#include <iomanip>
 #include <numeric>
 
 ///// stepping_iota():
@@ -78,9 +79,10 @@ namespace NLK {
   /*! Serializes std containers to strings.
    * Requires available conversion to string for the contained type. */
   template<typename T>
-  std::string v2s(const T& v)
+  std::string v2s(const T& v, int precision=6)
   {
     std::stringstream ss;
+    ss << std::setprecision(precision);
     for (const auto& x: v)
       ss << x << " ";
     return ss.str();
