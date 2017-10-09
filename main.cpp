@@ -226,7 +226,8 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
   std::cout << "Running on a mesh with " << mesh->num_cells()
             << " cells.\n"
             << "FE space has " << W3->dim() << " dofs.\n"
-            << "Using alpha = " << alpha << ", tau = " << tau << ".\n"
+            << "Using alpha = " << alpha << ", tau = " << tau << ", "
+            << "eps = " << eps << ".\n"
             << "Scaling timestep every " << static_cast<int>(checkpoints_at)
             << " steps by " << adaptive_factor << ".\n";
             
