@@ -46,8 +46,9 @@ discrete_energy(double alpha,
   // due to missing implementation in uflacs (in particular the
   // hermite mapping is missing in
   // apply_single_function_pullbacks.py). Because they are constant,
-  // we just ignore them. 
-  energy += dkt_inner(y, L);
+  // we just approximate them with roughly the area of the smallest simplex. 
+  double fudge_factor = 0.5 * std::pow(y.function_space()->mesh()->hmin(), 2);
+  energy += fudge_factor * dkt_inner(y, L);
   return energy;
 }
 
