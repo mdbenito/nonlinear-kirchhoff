@@ -7,10 +7,6 @@ namespace dolfin
 {
   namespace NLK { using namespace NonlinearKirchhoff; }
 
-  // compute |nablaT y nabla y - id|
-  // FIXME!! I'm computing average distance across all vertices instead
-  // of integrating
-
   double
   distance_to_isometry(Function& y)
   {
@@ -21,11 +17,10 @@ namespace dolfin
     std::vector<la_index> dxdofs, dydofs;
     dxdofs.reserve(N*3);
     dydofs.reserve(N*3);
-    for (int sub = 0; sub < 3; ++sub) {
-      // auto dm = (*W3)[sub]->dofmap();
+    for (VertexIterator vit(*mesh); !vit.end(); ++vit) {
       // The following should be a process-local index
-      for (VertexIterator vit(*mesh); !vit.end(); ++vit) {
-        auto idx = static_cast<la_index> (vit->index());
+      auto idx = static_cast<la_index> (vit->index());
+      for (int sub = 0; sub < 3; ++sub) {  
         auto dofdx = v2d[9 * idx + 3 * sub + 1];
         auto dofdy = v2d[9 * idx + 3 * sub + 2];
         dxdofs.push_back(dofdx);
@@ -36,14 +31,21 @@ namespace dolfin
     y.vector()->get(dx.data(), dxdofs.size(), dxdofs.data());
     y.vector()->get(dy.data(), dydofs.size(), dydofs.data());
 
-    double dxdx = std::inner_product(dx.begin(), dx.end(), dx.begin(), 0),
-           dxdy = std::inner_product(dx.begin(), dx.end(), dy.begin(), 0),
-           dydy = std::inner_product(dy.begin(), dy.end(), dy.begin(), 0);
-    // subtract identity at each vertex
-    double frobsq = (std::pow(dxdx - N, 2) +
-                     std::pow(dydy - N, 2) +
-                     2 * std::pow(dxdy, 2)) / N;
-    return std::sqrt(frobsq);
+    double frob = 0.0;
+    for(auto i=0; i < N; ++i) {
+      double xx = 0, yy = 0, xy = 0;
+      for(int j=0; j < 3; ++j) {
+        xx += dx[3*i+j]*dx[3*i+j];
+        yy += dy[3*i+j]*dy[3*i+j];
+        xy += dx[3*i+j]*dy[3*i+j];
+      }
+      frob += std::sqrt((xx - 1.0)*(xx - 1.0) + 2.0*xy*xy + (yy - 1)*(yy - 1));
+    }
+
+    // HACK! approximate the integral of a nodal basis function by the area
+    // of the minimal triangle. This is VERY inaccurate.
+    double fudge_factor = 0.5*std::pow(y.function_space()->mesh()->hmin(), 2);
+    return frob * fudge_factor;
   }
 
   std::unique_ptr<Function>
