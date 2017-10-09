@@ -117,11 +117,17 @@ namespace dolfin
     return f;
   }
 
-  std::unique_ptr<std::vector<la_index>>
+  std::shared_ptr<std::vector<la_index>>
   nodal_indices(std::shared_ptr<const FunctionSpace> W3)
   {
+    static std::map<std::shared_ptr<const FunctionSpace>, 
+                    std::shared_ptr<std::vector<la_index>>> cache;
+    auto it = cache.find(W3);
+    if(it != cache.end())
+      return it->second;
+
     int N = W3->mesh()->num_vertices();
-    std::unique_ptr<std::vector<la_index>> indices(new std::vector<la_index>());
+    auto indices = std::make_shared<std::vector<la_index>>();
     indices->reserve(N);
     auto v2d = vertex_to_dof_map(*W3);
     for (VertexIterator v(*(W3->mesh())); !v.end(); ++v) {
@@ -132,6 +138,7 @@ namespace dolfin
         indices->push_back(dof);
       }
     }
+    cache[W3] = indices;
     return indices;
   }
 
@@ -141,8 +148,7 @@ namespace dolfin
             std::shared_ptr<const FunctionSpace> W3)
   {
     assert(v1->size() == v2->size());
-    // FIXME: call only once, not at every inner product!
-    const auto& indices = nodal_indices(W3);
+    auto indices = nodal_indices(W3);
     auto N = indices->size();
     std::vector<double> vals1(N), vals2(N);
     v1->get_local(vals1.data(), N, indices->data());

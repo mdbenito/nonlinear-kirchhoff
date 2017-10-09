@@ -38,7 +38,7 @@ namespace dolfin
   /*!
    * 
    */
-  std::unique_ptr<std::vector<int>>
+  std::shared_ptr<std::vector<int>>
   nodal_indices(std::shared_ptr<const FunctionSpace> W3);
   
   /*!
