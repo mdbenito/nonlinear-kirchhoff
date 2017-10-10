@@ -374,8 +374,16 @@ dostuff(std::shared_ptr<Mesh> mesh, double alpha, int max_steps, double eps,
 
     if(std::floor(step / checkpoints_at) > dec_ctr) {
       dec_ctr = std::floor(step / checkpoints_at);
-      tau *= adaptive_factor;
-      std::cout << "Corrected tau = " << tau << "\n";
+      std::cout << "FIXME: Disabled tau correction!\n";
+      //tau *= adaptive_factor;
+      //std::cout << "Corrected tau = " << tau << "\n";
+
+      // FIXME!! Need to do this but PETSc won't let me reinit A.
+      // A = std::make_shared<Matrix>(Ao->copy());
+      // *A *= 1 + alpha*tau;
+      // bc.apply(*A);
+      // block_Mk->set_block(0, 0, A);
+      // Mk.read(0, 0);
       
       // output current solution
       file << y;
