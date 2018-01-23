@@ -71,8 +71,12 @@ foreach(UFL_FILENAME ${UFL_FILENAMES})
            ${FFC_OUTPUT_DIR}/${UFL_BASENAME}.cpp
     MAIN_DEPENDENCY ${UFL_FILENAME}
     WORKING_DIRECTORY ${UFL_DIRECTORY}
-    COMMAND . /home/fenics/fenics.env.conf && ffc ${FFC_FLAGS} --output-directory ${FFC_OUTPUT_DIR} ${UFL_FILENAME}
     COMMENT Running FEniCS Form Compiler on ${UFL_FILENAME}.
+    if (EXISTS "$ENV{HOME}/fenics.env.conf")
+      COMMAND . $ENV{HOME}/fenics.env.conf && ffc ${FFC_FLAGS} --output-directory ${FFC_OUTPUT_DIR} ${UFL_FILENAME}
+    else()
+      COMMAND ffc ${FFC_FLAGS} --output-directory ${FFC_OUTPUT_DIR} ${UFL_FILENAME}
+    endif()
     )
 
   # Accumulate list of generated sources to compile into executable
