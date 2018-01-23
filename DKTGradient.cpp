@@ -136,7 +136,7 @@ DKTGradient::update(const std::vector<double>& cc)
   copy_tt(2, 10, 3);
   copyTT(2, 10, 4);
 
-  permutation_hack(_M);
+  permutation_hack();
   
   _Mt = _M.transpose();
 }

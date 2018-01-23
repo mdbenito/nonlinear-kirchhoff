@@ -96,6 +96,12 @@ public:
 
   static void
   permutation_hack(DKTGradient::M_t& M, bool undo = false);
+
+  void
+  permutation_hack(bool undo = false) {
+    permutation_hack(this->_M, undo);
+  }
+ 
   M_t M() const { return _M; };
   Mt_t Mt() const { return _Mt; };
   

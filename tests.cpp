@@ -214,9 +214,9 @@ test_DKT(void)
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.6667, -0.6667, 0.0, 0.0, -1.3333, 2.6667 };
 
   DKTGradient::P3Tensor D;
-  DKTGradient::permutation_hack(dg._M, true); // HACK!!!!
+  dg.permutation_hack(true); // HACK!!!!
   dg.apply(p22tensor, D);
-  DKTGradient::permutation_hack(dg._M); // UNDO HACK!!!!
+  dg.permutation_hack(false); // UNDO HACK!!!!
   
   DKTGradient::P3Tensor D_ok = {
     10.3125, 1.5312, 1.1563, -11.0625, 1.75, 0.9062, 0.75, -0.2188, 0.0625, 
